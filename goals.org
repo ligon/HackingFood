@@ -1,0 +1,124 @@
+#+Title: Hacking Food & Nutrition
+#+Author: Ethan Ligon
+#+EPRESENT_FRAME_LEVEL: 3
+#+OPTIONS: toc:nil pri:t
+This project exploits our work on demand for food and is focused on
+evaluating what kinds of *policies* might be effective at improving
+nutritional outcomes for particular populations.  Our earlier work
+addressed the question of how demand for different kinds of food
+depends on prices, budgets, and household characteristics, taking as
+given prices, budgets, and so on.
+
+One of the take-aways from our earlier project is that the food people
+/choose/ to eat may be quite different from the foods that people
+/should/ eat, from a nutritional perspective.   
+
+But if dietary choices respond to prices and budgets, it may be
+possible to manipulate nutritional outcomes by changing either prices
+or budgets.  We can assess the costs of this kind of manipulation
+(e.g., the deadweight cost of a tax or subsidy); where these costs are
+large we can also think about the value of innovation in either the
+desirability or nutritional content of food.
+
+* Deliverables
+  This project should result in some or all of the following sorts of
+  deliverables.
+
+   - A :: These deliverables are
+          /required/.  Note that other
+          deliverables may rely on
+          completion of A deliverables.
+   - B :: These deliverables are /very
+          desirable/.
+   - C :: These deliverables would be
+          /nice to have/.
+
+** [#A] Replicability & Documentation
+   Create a public repository on =github.com= to contain all your code and
+   data, also with documentation which is good enough to allow other
+   students outside your group to replicate your findings.  
+
+** [#A] Document Goals
+
+   Create a post on =piazza.com= for your group describing your ideas
+   for how you'll tackle each of the goals described below.  What
+   tasks need to be accomplished, and who will accomplish them?
+
+   Update this post as the project proceeds.
+
+** [#A] Choice of a dataset
+
+        Need to be able to:
+          - Observe item expenditures, to estimate demand system;
+          - Observe (or construct) quantities of different items, in
+            units that can be converted into standard units;
+          - Be able to map quantities of food into bundles of nutrients.
+
+** [#A] Estimate Demand System
+   Estimate a system of demands for different kinds of food, obtaining
+   estimates of parameters than can then be used to describe demands
+   as function of prices, budgets, and household characteristics.
+
+** [#A] Construct Nutrient System
+   If you can describe quantities demanded as function of prices, budgets, and
+   household characteristics, and map quantities into nutrients, then
+   you can also describe a system of /nutrients/ as a function of the
+   same variables.  
+
+** [#A] Nutritional challenges & Policy Goal
+   Compare predicted nutrition to recommended nutrition.  Establish
+   some criteria for deciding what the biggest nutritional challenges
+   are for this population.  For example, what share of households is
+   Calorie deficient?  Protein deficient?  Vitamin A deficient?
+
+   Note that different criteria are possible, and there is no one
+   "right" criterion.
+  
+   Characterize the nutritional challenges you observe in your data,
+   and construct a policy goal to address some of these challenges
+   (e.g., reduce proportion of households that are protein deficient
+   by half).
+
+** [#B] Policy Options
+   Design two or more policies which achieve your policy goal.   For example,
+   targeted income transfers to increase households' food budgets, or
+   subsidies or taxes to change the relative price of foods.  Use
+   simulation to show that the proposed policies achieve the policy goal.
+
+** [#C] Policy Cost
+   Your proposed policy will have some cost.  A tax or subsidy will
+   involve a dead-weight loss.  Without knowing the supply-side we
+   won't be able to measure this, but what if supply is perfectly
+   elastic?  What can you say about the costs of the different
+   policy options?
+
+** [#C] Value of Technical Innovation
+
+   We're not necessarily stuck with a particular mapping from food to
+   nutrients; perhaps foods can be engineered or designed to deliver
+   different nutritional outcomes.  Identify particular foods that
+   might be engineered in particular ways to address your policy goal
+   (compare the example of "golden rice", which engineered rice to
+   increase the amount of vitamin A).  What would the value of these
+   innovations be?  How might this information be used to guide
+   investments in research and development of improved sorts of food?
+
+** [#A] Presentation
+
+   Each team will be responsible for giving a 15 minute presentation
+   of the work they've accomplished during the sprint.  Be creative!
+   Think of awesome new ways to help others visualize what you've
+   learned. 
+
+** [#A] Replication & Discussion
+
+   Your project and git repository will be shared with some randomly
+   chosen other team, and your team will be randomly chosen to have
+   materials from some other team share with it. 
+ 
+   Attempt to replicate the other team's main results, using the data
+   and code shared with you.  Document your attempt, identifying any
+   problems you encountered, your thoughts on overcoming these
+   problems, and describing strengths and weaknesses of the other
+   team's analysis.   
+

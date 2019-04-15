@@ -1,0 +1,106 @@
+* Introduction
+In our last project we used data to estimate systems of food demand
+using different datasets.  An output from that project was as set of
+=cfe.Result= objects; these bundle together both data and the results
+from the demand system estimation, and can be used for prediction as
+well.  
+
+Here we'll explore some of the uses of the =cfe.Result= class, using
+an instance created using data from the Indian ICRISAT data.
+
+If you don't already have the latest version of the =cfe= package
+installed, grab it, along with some dependencies:
+#+begin_src ipython
+!pip install CFEDemands --upgrade
+!pip install xarray
+#+end_src
+
+#+begin_src ipython
+import cfe
+
+cfe.Result?
+#+end_src
+
+An instance =r= of =cfe.Result= can be made persistent with
+=r.to_dataset('my_result.ds')=, which saves the instance "on disk" in
+[[https://en.wikipedia.org/wiki/NetCDF][NetCDF format]], and can be loaded using =cfe.from_dataset=.  We use
+this method below to load data and demand system estimated for the
+Indian ICRISAT villages:
+#+begin_src ipython
+
+# Results can be made persistent by saving them, and then re-loading...
+r = cfe.from_dataset('./IndianICRISAT/indian_icrisat.ds')
+r
+#+end_src
+
+Our focus earlier was on estimation, but the result =r= already has
+encoded in it the results of that estimation.
+
+There are parameters $\alpha$:
+#+begin_src ipython
+r.get_alpha(as_df=True)
+#+end_src
+
+Elasticity parameters $\beta$:
+#+begin_src ipython
+r.get_beta(as_df=True)
+#+end_src
+
+And parameters related to household characteristics $\delta$:
+
+#+begin_src ipython
+r.delta.to_dataframe().unstack('k')
+#+end_src
+
+The triple of paramters $(\alpha,\beta,\delta)$ completely describes
+the demand system and the corresponding utility function (over the
+goods we observe).
+
+* Demands
+
+As mentioned above, we've estimated the parameters of a Frischian
+demand system (demands that depend on prices and the households
+marginal utility of expenditures).  But we can /compute/ the
+corresponding Marshallian (depends on prices and budget) or Hicksian
+(depends on prices and the level of utility) demands for this same
+population, using the =cfe.Result.demands= method.  
+
+Let's compute Marshallian demands.  Start with a choice of budget $x$
+and prices.  We'll use the earliest prices, from 1975, and focus on
+village A as the market we're interested in
+#+begin_src ipython
+x = 50 # Budget
+
+# Note selection of prices for 1975 for market A
+p = r.prices.sel(t=75,m='A').copy()
+
+p.to_dataframe().squeeze()
+#+end_src
+
+Now compute demands.  The object =r= already knows what the estimated
+parameters are, and uses those automatically:
+
+#+begin_src ipython
+r.demands(x,p)
+
+#+end_src
+
+So we can compute demands.  Let's trace out a demand curve for coconuts:
+#+begin_src ipython
+import numpy as np
+import matplotlib.pyplot as plt
+%matplotlib inline
+
+# Values for coconut prices
+P = np.linspace(0.1,10,50)
+
+def my_prices(p0,p=p):
+    p.loc['Coconut'] = p0
+    return p
+
+for x in [10,20,40,80,160]:
+    plt.plot([r.demands(x,my_prices(p0))['Coconut'] for p0 in P],P)
+
+plt.xlabel('Coconuts')
+plt.ylabel('Price')
+#+end_src
