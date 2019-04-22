@@ -5,8 +5,8 @@ First, load relevant dataset:
 import cfe
 
 ## Choose dataset ##
-#USE = "ICRISAT"
-USE = "Tanzania"
+USE = "ICRISAT"
+#USE = "Tanzania"
 
 # Results can be made persistent by saving them, and then re-loading...
 if USE=="ICRISAT":
@@ -177,18 +177,6 @@ fct0,c0 = fct.align(c,axis=0,join='inner')
 print(fct0.index)
 #+end_src
 
-#+results:
-:results:
-# Out[22]:
-# output
-Index(['Millet And Sorghum (Flour)', 'Sugar', 'Groundnuts In Shell/Shelled',
-       'Coconuts (Mature/Immature)', 'Ripe Bananas', 'Sugarcane', 'Goat Meat',
-       'Beef Including Minced Sausage', 'Chicken And Other Poultry', 'Eggs',
-       'Fresh Milk', 'Salt', 'Other Spices', 'Tea Dry'],
-      dtype='object')
-
-:end:
-
 
 Now, since rows of =fct0= and =c0= match, we can obtain nutritional
 outcomes from the inner (or dot, or matrix) product of the transposed
@@ -199,25 +187,6 @@ outcomes from the inner (or dot, or matrix) product of the transposed
 N = fct0.T@c0
 N
 #+end_src
-
-#+results:
-:results:
-# Out[23]:
-# text/plain
-: Calories      432920.397011
-: Protein         9544.740191
-: vit a ug       17473.753555
-: vit d ug          11.919387
-: vit e ug         734.994869
-: vit c mg       34266.940272
-: vit b6 mg       1610.296054
-: vit b12 ug        46.662646
-: Calcium        56964.668342
-: mg mg         115774.554676
-: Iron            1657.266998
-: zn mg           1154.604429
-: dtype: float64
-:end:
 
 Of course, since we can compute the nutritional content of a vector of
 consumption goods =c0=, we can also use our demand functions to
@@ -248,18 +217,6 @@ plt.xlabel('log budget')
 plt.ylabel('log nutrient')
 #+end_src
 
-#+results:
-:results:
-# Out[24]:
-# text/plain
-: Text(0, 0.5, 'log nutrient')
-
-# text/plain
-: <Figure size 432x288 with 1 Axes>
-
-# image/png
-[[file:obipy-resources/9c46f40b7b1ba4ed16d9c707368ae8a6-746SEk.png]]
-:end:
 
 Now how does nutrition vary with prices?
 
@@ -281,19 +238,6 @@ plt.xlabel('log price')
 plt.ylabel('log nutrient')
 #+end_src
 
-#+results:
-:results:
-# Out[27]:
-# text/plain
-: Text(0, 0.5, 'log nutrient')
-
-# text/plain
-: <Figure size 432x288 with 1 Axes>
-
-# image/png
-[[file:obipy-resources/9c46f40b7b1ba4ed16d9c707368ae8a6-746sYw.png]]
-:end:
-
 
 * Nutritional requirements
 
@@ -304,7 +248,7 @@ National Institute of Nutrition:
 ** Nutritional needs of individuals
 
 *** Recommended Daily Allowances: India
-
+ #+name: rda
  | Sex-Age | Calories | Protein | Fat | Calcium | Iron | Betacarotene | Thiamine | Riboflavin | Niacin | Ascorbic Acid |
  |---------+----------+---------+-----+---------+------+--------------+----------+------------+--------+---------------|
  | C 0-0.5 |          |         |     |     500 |      |              |       .2 |         .3 |        |            25 |
@@ -323,7 +267,6 @@ National Institute of Nutrition:
 
 *** Recommended Daily Allowances: Tanzania
 
-#+name: rda
 | Sex-Age | Calories |   Protein | Vitamin A | Vitamin B6 | Vitamin B12 | Vitamin C | Vitamin D | Vitamin E | Calcium |   Iron | Magnesium |  Zinc |
 |---------+----------+-----------+-----------+------------+-------------+-----------+-----------+-----------+---------+--------+-----------+-------|
 | C 0-2   |      680 |     13.05 |    395833 |       0.35 |       0.725 |     28.75 |         5 |      3850 |   437.5 |  4.325 |     51.25 | 3.775 |
@@ -336,7 +279,7 @@ National Institute of Nutrition:
 
 #+begin_src ipython :var RDA=rda :colnames no :exports none :results silent
 rda=pd.DataFrame([x[1:] for x in RDA[1:]],columns=RDA[0][1:],index=[x[0] for x in RDA[1:]])
-rda.to_pickle('rda.df')
+rda.to_pickle(DIR+'rda.df')
 #+end_src
 
 ** Nutritional Needs of Households
@@ -407,7 +350,7 @@ plt.axhline(0)
 
 
 As before, we can also vary relative prices.  Here we trace out
-nutritional adequacy varying the price of Bengalgram dahl:
+nutritional adequacy varying the price of a single good:
 #+begin_src ipython
 poorer_x = x/2
 
