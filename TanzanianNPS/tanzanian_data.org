@@ -1,0 +1,238 @@
+* Tanzanian LSMS Data
+The following sets up a dataframe from Tanzanian data; it relies on code
+from =Data/LSMS/Tanzania/MANIFEST.org= to create a pickled pd.DataFrame
+=Data/LSMS/Tanzania/tmp/tanzania.df=; also on a file
+=Data/LSMS/Tanzania/expenditure_codes.df= which provides a mapping of
+codes for different expenditure items into particular food categories.
+
+Output from this routine should include a pair of =pd.DataFrames=
+indexed by =(j,t,mkt)=.  The  first is called =y=, with columns
+corresponding to log expenditures (zero expenditures should be set to
+=NaN=).    The second is called =z=, with columns corresponding to
+various household characteristics to be controlled for in the demand
+estimation.  
+
+Other inputs to the routine include information on how markets are to
+be defined; conceptually,  these are areas (ordinarily geographical)
+within which we expect the Law of One Price to hold,  at least
+approximately.  This involves specifying a variable in =tanzania.df=
+which gives an indication of what market a given  household resides
+in.  Examples might include region, or a rural/urban identifier.  If
+empty, it's assumed that  all households live in a common market.
+
+#+name: market
+|   |
+
+| Region |
+
+A final input is a list of variables in =tanzania.df= of household
+characteristics, to be controlled for in the demand regressions.  This
+will typically include information on household composition.  Note
+that this list must /not/ include the variables which define the market.
+
+#+name: controls
+| log HSize | Males 0-2 | Males 2-5 | Males 5-10 | Males 10-15 | Males 15-17 | Males 17-100 | Females 0-2 | Females 2-5 | Females 5-10 | Females 10-15 | Females 15-17 | Females 17-100 |
+
+| log HSize | Males 0-1 | Males 1-5 | Males 5-10 | Males 10-15 | Males 15-20 | Males 20-30 | Males 30-50 | Males 50-60 | Males 60-100 | Females 0-1 | Females 1-5 | Females 5-10 | Females 10-15 | Females 15-20 | Females 20-30 | Females 30-50 | Females 50-60 | Females 60-100 |
+
+| Rural | log HSize | Boys | Girls | Men | Women |
+
+
+
+#+name: tanzanian_data
+#+begin_src python :noweb no-export :var MARKET=market[0] :var CONTROLS=controls[0] :results output raw table :tangle tanzanian_data.py
+import pandas as pd
+import numpy as np
+import sys
+sys.path.append('~/Data/LSMS/Tanzania/tmp/')
+import cfe.estimation as nd
+import cfe
+
+def tanzanian_data(MARKET=MARKET,CONTROLS=CONTROLS,DataDir='./'):
+    """Return log expenditures y, household characteristics z, and prices.
+    """
+
+    assert len(set(MARKET).intersection(CONTROLS))==0, "Controls must not include market."
+
+    exps=pd.read_pickle(DataDir+'/expenditure_codes.pickle')
+
+    try:
+        df=pd.read_pickle(DataDir+'/tanzania.df')
+        prices=pd.read_pickle(DataDir+'/food_prices.df')
+    except IOError:
+        print("Need to build {tanzania,food_prices}.df (using code in LSMS/Uganda/MANIFEST.org).")
+
+    expdf=nd.group_expenditures(df,exps)
+
+    expdf=expdf.replace(0,np.nan) # Zeros to NaN
+
+    # Drop goods where too few observations to reliably estimate covariance matrix
+    #expdf=nd.drop_columns_wo_covariance(expdf,min_obs=30,VERBOSE=False)
+
+    # Fix up some variables used as characteristics
+    #df.rename(columns={'region':'Region'},inplace=True)
+
+    mydf=expdf.copy()
+
+    mydf = mydf.join(df.filter(regex="Female *"))
+    mydf = mydf.join(df.filter(regex="Male *"))
+    mydf['HHSize']=df[['boys','girls','women','men']].sum(axis=1)
+    mydf['HHSize'].replace(to_replace=[0],value=[np.NaN],inplace=True)
+    mydf['log HSize']=np.log(mydf['HHSize'])
+    mydf['Boys']=df['boys']
+    mydf['Girls']=df['girls']
+    mydf['Women']=df['women']
+    mydf['Men']=df['men']
+    #mydf['Rural']=df['urban']
+    if 'Rural' in CONTROLS: # Make a dummy
+        mydf['Rural'] = (mydf['Rural']=='rural') + 0.
+
+    #mydf['Region']=df['Region']
+
+    # Order so year is second level
+    mydf.index.set_names(['t','j'],inplace=True)
+    mydf = mydf.reset_index().set_index(['j','t'])
+
+    mydf.sort_index(inplace=True)
+
+    mydf.reset_index(inplace=True)
+    if len(MARKET[0]):
+        mydf['m']=mydf[MARKET]
+    else:
+        mydf['m']=1
+
+    mydf = mydf.set_index(['j','t','m'])
+
+    y=np.log(mydf[expdf.columns])
+    z=mydf[CONTROLS]
+
+    ####################################
+    # Now set up market prices
+
+    #prices.index=prices.index.reorder_levels([1,0,2]) # Make index order match prices
+
+    #prices.index.names = ['j','t','Item']
+    prices.index.name = 't'
+    pricedf = prices
+
+    #pricedf=nd.group_expenditures(prices['market'].unstack(),exps)
+    #pricedf=pricedf.replace(0,np.nan) # Zeros to NaN
+
+    if len(MARKET[0]):
+        pricedf['m']=mydf.reset_index('m')[MARKET]
+    else:
+        pricedf['m']=1
+
+    #pricedf = pricedf.reset_index().set_index(['j','t','mkt'])
+    prices = pricedf #.reset_index().set_index(['t','mkt'])
+
+    # Also give prices for good to be declared numeraire.
+    # E.g., here are median rice prices and onion prices in different years from LSMS/Uganda/MANIFEST.org:
+    #prices = pricedf.reset_index().groupby(['t','mkt']).median()
+
+    return y,z,prices
+
+y,z,prices=tanzanian_data(DataDir="/home/ethanligon/Data/LSMS/Tanzania/tmp")
+
+# Change age-sex categories to match rdas
+rda_cats = ['C 0-2','C 2-5','C 6-9','C 10-14','C 15-17','Men','Women']
+myz = pd.DataFrame({'C 0-2':z['Males 0-2'] + z['Females 0-2'],
+                    'C 2-5':z['Males 2-5'] + z['Females 2-5'],
+                    'C 6-9':z['Males 5-10'] + z['Females 5-10'],
+                    'C 10-14':z['Males 10-15'] + z['Females 10-15'],
+                    'C 15-17':z['Males 15-17'] + z['Females 15-17'],
+                    'Men':z['Males 17-100'],
+                    'Women':z['Females 17-100']})
+
+myz['log HSize'] = z['log HSize']
+del prices['m']
+y.index.levels[2].name ='m'
+z.index.levels[2].name ='m'
+prices.index.levels[1].name ='m'
+
+r = cfe.Result(y=y,z=myz,prices=prices)
+
+r.get_reduced_form()
+r.get_beta()
+r.to_dataset('tanzanian_nps.ds')
+print(r)
+#+end_src
+
+#+results: tanzanian_data
+<xarray.Result>
+Dimensions:           (i: 38, j: 13562, k: 8, kp: 8, m: 1, t: 4)
+Coordinates:
+  * k                 (k) object 'C 0-2' 'C 2-5' 'C 6-9' ... 'Women' 'log HSize'
+  * m                 (m) int64 1
+  * t                 (t) int64 2008 2010 2012 2014
+  * i                 (i) object 'Beef Including Minced Sausage' ... 'Yams/Cocoyams'
+  * j                 (j) object '0001-001' '0002-001' ... '905012325008102'
+  * kp                (kp) <U9 'C 0-2' 'C 10-14' ... 'Women' 'log HSize'
+Data variables:
+    alpha             object None
+    beta              (i) float64 1.213 1.286 1.002 1.239 ... 1.538 0.5749 0.806
+    delta             (k, i) float64 -0.07384 -0.1102 ... 0.1886 0.0008541
+    prices            (i, t, m) float64 2.6e+03 3e+03 3.067e+03 ... 1.101 1.25
+    characteristics   (k, j, t, m) float64 nan nan 0.0 nan ... nan 0.0 nan nan
+    loglambdas        (j, t, m) float64 nan nan 0.6632 nan ... nan nan nan nan
+    a                 (i, t, m) float64 7.48 7.69 7.89 ... 6.505 6.717 7.089
+    yhat              object None
+    ce                (j, t, m, i) float64 nan nan nan nan ... nan nan nan nan
+    cehat             (j, t, m, i) float64 nan nan nan nan ... nan nan nan nan
+    e                 object None
+    delta_covariance  (i, k, kp) float64 0.000466 9.196e-05 ... 0.02433
+    se_delta          (i, k) float64 0.02159 0.0182 0.01592 ... 0.04073 0.156
+    se_beta           object None
+    se_alpha          object None
+    se_a              (i, t, m) float64 0.02981 0.01804 ... 0.07615 0.067
+    y                 (i, j, t, m) float64 nan nan 7.601 nan ... nan nan nan nan
+    logp              (i, t, m) float64 7.863 8.006 8.028 ... 0.09623 0.2231
+    z                 (k, j, t, m) float64 nan nan 0.0 nan ... nan 0.0 nan nan
+Attributes:
+    firstround:            2008
+    min_proportion_items:  0.125
+    min_xproducts:         30
+    useless_expenditures:  False
+    stderr_tol:            0.01
+    indices:               Indices(j='j', t='t', m='m', i='i', k='k')
+    verbose:               False
+<xarray.Result>
+Dimensions:           (i: 121, j: 9638, k: 13, mkt: 1, t: 4)
+Coordinates:
+  * i                 (i) object '$x_{1001}$' '$x_{1002}$' ... 'Yams/Cocoyams'
+  * t                 (t) int64 2008 2010 2012 2014
+  * mkt               (mkt) int64 1
+  * j                 (j) object '0001-001' '0002-001' ... '9050123250081'
+  * k                 (k) <U14 'log HSize' 'Males 0-2' ... 'Females 17-100'
+Data variables:
+    alpha             object None
+    beta              object None
+    delta             object None
+    prices            (i, t, mkt) float64 2.545 2.857 3.333 3.0 ... nan nan nan
+    characteristics   (k, j, t, mkt) float64 nan nan 1.386 nan ... nan nan nan
+    loglambdas        object None
+    a                 object None
+    yhat              object None
+    ce                object None
+    cehat             object None
+    e                 object None
+    delta_covariance  object None
+    se_delta          object None
+    se_beta           object None
+    se_alpha          object None
+    se_a              object None
+    y                 (i, j, t, mkt) float64 nan nan nan nan ... nan nan nan nan
+    logp              (i, t, mkt) float64 0.9343 1.05 1.204 ... nan nan nan
+    z                 (k, j, t, mkt) float64 nan nan 1.386 nan ... nan nan nan
+Attributes:
+    firstround:            2008
+    min_proportion_items:  0.125
+    min_xproducts:         30
+    useless_expenditures:  True
+    stderr_tol:            0.01
+    indices:               Indices(j='j', t='t', m='m', i='i', k='k')
+    verbose:               False
+
+
+
+

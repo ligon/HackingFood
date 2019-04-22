@@ -15,12 +15,11 @@ installed, grab it, along with some dependencies:
 !pip install xarray
 #+end_src
 
-#+begin_src ipython
+#+begin_src ipython :results silent
 import cfe
 
 cfe.Result?
 #+end_src
-
 
 An instance =r= of =cfe.Result= can be made persistent with
 =r.to_dataset('my_result.ds')=, which saves the instance "on disk" in
@@ -28,9 +27,16 @@ An instance =r= of =cfe.Result= can be made persistent with
 this method below to load data and demand system estimated for the
 Indian ICRISAT villages:
 #+begin_src ipython
+#USE = "ICRISAT"
+USE = "Tanzania"
 
 # Results can be made persistent by saving them, and then re-loading...
-r = cfe.from_dataset('./IndianICRISAT/indian_icrisat.ds')
+if USE=="ICRISAT":
+    r = cfe.from_dataset('./IndianICRISAT/indian_icrisat.ds')
+elif USE=="Tanzania":
+    r = cfe.from_dataset('./TanzanianNPS/tanzanian_nps.ds')
+else:
+    raise ValueError("No such value of USE")
 r
 #+end_src
 
@@ -42,16 +48,19 @@ There are parameters $\alpha$:
 r.get_alpha(as_df=True)
 #+end_src
 
+
 Elasticity parameters $\beta$:
 #+begin_src ipython
 r.get_beta(as_df=True)
 #+end_src
+
 
 And parameters related to household characteristics $\delta$:
 
 #+begin_src ipython
 r.delta.to_dataframe().unstack('k')
 #+end_src
+
 
 The triple of paramters $(\alpha,\beta,\delta)$ completely describes
 the demand system and the corresponding utility function (over the
@@ -67,13 +76,17 @@ corresponding Marshallian (depends on prices and budget) or Hicksian
 population, using the =cfe.Result.demands= method.  
 
 Let's compute Marshallian demands.  Start with a choice of budget $x$
-and prices.  We'll use the earliest prices, from 1975, and focus on
-village A as the market we're interested in
-#+begin_src ipython
-x = 50 # Budget
+and prices.  We'll use the earliest prices, and focus on
+the first market we're interested in.
+#+begin_src ipython :results silent
+t = r.firstround  # First round
+m = r.coords['m'][0] # First market
+
+x = r.get_predicted_expenditures().sum('i')
+x = x.where(x>0).sel(t=t,m=m).median('j') # Budget (median household)
 
 # Note selection of prices for 1975 for market A
-p = r.prices.sel(t=75,m='A').copy()
+p = r.prices.sel(t=t,m=m).fillna(1).copy()
 
 p.to_dataframe().fillna(1).squeeze()
 #+end_src
@@ -86,6 +99,50 @@ c=r.demands(x,p)
 c
 #+end_src
 
+#+results:
+:results:
+# Out[7]:
+# text/plain
+: i
+: Beef Including Minced Sausage                                   0.241992
+: Bottled/Canned Soft Drinks (Soda, Juice, Water)              1768.747224
+: Bread                                                         200.305064
+: Buns, Cakes And Biscuits                                      400.902551
+: Cassava Fresh                                                  13.468608
+: Chicken And Other Poultry                                     167.299425
+: Citrus Fruits (Oranges, Lemon, Tangerines, Etc.)             9340.793779
+: Coconuts (Mature/Immature)                                    237.404094
+: Cooking Bananas, Plantains                                    652.945691
+: Cooking Oil                                                   339.852002
+: Dried/Salted/Canned Fish And Seafood (Incl. Dagaa)            203.900051
+: Eggs                                                            1.489923
+: Fresh Fish And Seafood (Including Dagaa)                     2185.258613
+: Fresh Milk                                                      0.419712
+: Goat Meat                                                       0.266690
+: Groundnuts In Shell/Shelled                                    37.869884
+: Honey, Syrups, Jams, Marmalade, Jellies, Canned Fruits        484.384466
+: Irish Potatoes                                                  0.437325
+: Macaroni, Spaghetti                                            24.863887
+: Maize (Flour)                                                   0.984695
+: Mangoes, Avocadoes And Other Fruits                          8480.951817
+: Milk Products (Like Cream, Cheese, Yoghurt Etc)                 0.366679
+: Millet And Sorghum (Flour)                                      0.751271
+: Onions, Tomatoes, Carrots And Green Pepper, Other Viungo    10715.804942
+: Other Spices                                                   86.010228
+: Peas, Beans, Lentils And Other Pulses                           0.501578
+: Rice (Husked)                                                   0.593960
+: Ripe Bananas                                                 3911.440940
+: Salt                                                            1.957597
+: Spinach, Cabbage And Other Green Vegetables                  1641.522006
+: Sugar                                                          24.113397
+: Sugarcane                                                     330.813484
+: Sweet Potatoes                                                 35.068943
+: Sweets                                                          9.789479
+: Tea Dry                                                         3.901913
+: Yams/Cocoyams                                                  89.214214
+: Name: quantities, dtype: float64
+:end:
+
 
 So we can compute demands.  Let's trace out a demand curve for coconuts:
 #+begin_src ipython
@@ -93,19 +150,39 @@ import numpy as np
 import matplotlib.pyplot as plt
 %matplotlib inline
 
-# Values for coconut prices
-P = np.linspace(0.05,10,50)
+if USE=="ICRISAT":
+    USE_GOOD = 'Coconut'
+elif USE=="Tanzania":
+    USE_GOOD = 'Coconuts (Mature/Immature)'
+    
+# Values for prices
+ref_price = r.prices.sel(i=USE_GOOD,t=t,m=m)
+P = np.linspace(ref_price/5,ref_price*5,50)
 
-def my_prices(p0,p=p,i='Coconut'):
+def my_prices(p0,p=p,i=USE_GOOD):
     p = p.copy()
     p.loc[i] = p0
     return p
 
-for x in [10,20,40,80,160]:
-    plt.plot([r.demands(x,my_prices(p0))['Coconut'] for p0 in P],P)
+for myx in [x*s for s in [.25,.5,1.,2,4]]:
+    plt.plot([r.demands(myx,my_prices(p0))[USE_GOOD] for p0 in P],P)
 
-plt.xlabel('Coconuts')
+plt.xlabel(USE_GOOD)
 plt.ylabel('Price')
 #+end_src
+
+#+results:
+:results:
+# Out[14]:
+# text/plain
+: Text(0, 0.5, 'Price')
+
+# text/plain
+: <Figure size 432x288 with 1 Axes>
+
+# image/png
+[[file:obipy-resources/f45abea6a3a4062a48e0dee40722a647-746F6d.png]]
+:end:
+
 
 
