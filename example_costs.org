@@ -1,8 +1,15 @@
 * Preface
 
-First, load relevant dataset:
-#+begin_src ipython :results silent :tangle costs_preface.py
+First, install =CFEDemand= package if necessary:
+#+begin_src ipython 
+!pip install CFEDemands --upgrade
+
+#+end_src
+
+Then load relevant dataset:
+#+begin_src ipython :results silent :tangle costs_preface.py 
 import cfe
+import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
@@ -109,13 +116,8 @@ of 0.25 is the household at the 25th percentage point of the distribution).
 
 # A quantile of 0.5 is the median.  Play with quantile value, or just assign.
 x0 = xhat.sel(t=t,m=m).quantile(0.01,'j') # Budget (median household)
-x0 = 100
+x0 = 50
 #+end_src
-
-#+results:
-:results:
-# Out[19]:
-:end:
 
 
 #+begin_src ipython
@@ -135,14 +137,14 @@ plt.axvline(x0)
 
 #+results:
 :results:
-# Out[22]:
+# Out[3]:
 
 
 # text/plain
 : <Figure size 432x288 with 1 Axes>
 
 # image/png
-[[file:obipy-resources/756e60360b3cf57cec6422c0f6bcc791-746G0w.png]]
+[[file:obipy-resources/756e60360b3cf57cec6422c0f6bcc791-7464xB.png]]
 :end:
 
 
@@ -165,20 +167,18 @@ plt.axhline(p.sel(i=USE_GOOD).values)
 
 #+results:
 :results:
-# Out[39]:
+# Out[4]:
 
 
 # text/plain
 : <Figure size 432x288 with 1 Axes>
 
 # image/png
-[[file:obipy-resources/756e60360b3cf57cec6422c0f6bcc791-746gPx.png]]
+[[file:obipy-resources/756e60360b3cf57cec6422c0f6bcc791-746F8H.png]]
 :end:
 
 
 #+begin_src ipython
-
-
 plt.plot([r.demands(poorer_x,my_prices(p0,i=USE_GOOD))[USE_GOOD] for p0 in P],P)
 plt.ylabel('Price')
 plt.xlabel(USE_GOOD)
@@ -187,24 +187,26 @@ plt.axhline(p.sel(i=USE_GOOD).values)
 
 #+results:
 :results:
-# Out[36]:
+# Out[5]:
 
 
 # text/plain
 : <Figure size 432x288 with 1 Axes>
 
 # image/png
-[[file:obipy-resources/756e60360b3cf57cec6422c0f6bcc791-7465we.png]]
+[[file:obipy-resources/756e60360b3cf57cec6422c0f6bcc791-746SGO.png]]
 :end:
 
 * Compensated Policy Experiments
 
-
 #+begin_src ipython
-U0 = cfe.demands.marshallian.indirect_utility(x0,p,np.exp(r.alpha),r.beta,0)
+#USE_GOOD = 'Rice'
+USE_GOOD = 'Milk'
+
+U0 = r.indirect_utility(x0,p)
 
 plt.plot([r.demands(poorer_x,my_prices(p0,i=USE_GOOD))[USE_GOOD] for p0 in P],P)
-plt.plot([r.demands(poorer_x,my_prices(p0,i=USE_GOOD),type="Hicksian")[USE_GOOD] for p0 in P],P)
+plt.plot([r.demands(U0,my_prices(p0,i=USE_GOOD),type="Hicksian")[USE_GOOD] for p0 in P],P)
 plt.ylabel('Price')
 plt.xlabel(USE_GOOD)
 #plt.axhline(p.sel(i=USE_GOOD).values)
@@ -213,23 +215,81 @@ plt.legend(("Marshallian","Hicksian"))
 
 #+results:
 :results:
-# Out[45]:
+# Out[29]:
 
 
 # text/plain
 : <Figure size 432x288 with 1 Axes>
 
 # image/png
-[[file:obipy-resources/756e60360b3cf57cec6422c0f6bcc791-746stM.png]]
+[[file:obipy-resources/756e60360b3cf57cec6422c0f6bcc791-746Hwt.png]]
 :end:
 
-#+begin_src ipython
+#+begin_src ipython :results silent
 def compensating_variation(U0,p0,p1):
-    x0 = cfe.demands.hicksian.expenditurefunction(U0,p0,np.exp(r.alpha),r.beta,0)
-    x1 =  cfe.demands.hicksian.expenditurefunction(U0,p1,np.exp(r.alpha),r.beta,0)
+    x0 = r.expenditure(U0,p0)
+    x1 = r.expenditure(U0,p1)
 
     return x1-x0
 
-compensating_variation(U0,p,my_prices(1))
+def revenue(U0,p0,p1,type='Marshallian'):
+    """(Un)Compensated revenue from taxes changing vector of prices from p0 to p1.
+
+    Note that this is only for *demand* side (i.e., if supply perfectly elastic).
+    """
+    
+    dp = p1 - p0 # Change in prices
+
+    return dp.T@r.demands(U0,p1,type=type)
+
+
+def deadweight_loss(U0,p0,p1):
+    """
+    Deadweight loss of tax/subsidy scheme creating wedge in prices from p0 to p1.
+
+    Note that this is only for *demand* side (i.e., if supply perfectly elastic).
+    """
+    cv = compensating_variation(U0,p0,p1)
+
+    return revenue(U0,p0,p1,type='Hicksian') - cv
+    
+    
+def compensated_nutrient_demand(U,p,z=None):
+    c = r.demands(U,p,z=z,type='Hicksian')
+    fct0,c0 = fct.align(c,axis=0,join='inner')
+    N = fct0.T@c0
+
+    return N
+
+def compensated_nutrient_adequacy_ratio(U,p):
+    return compensated_nutrient_demand(U,p)/hh_rda
+
 #+end_src
+
+#+begin_src ipython
+fig,ax2 = plt.subplots()
+ax2.set_ylabel('log NAR')
+ax2.plot(P,[np.log(compensated_nutrient_adequacy_ratio(U0,my_prices(p0))[UseNutrients]) for p0 in P])
+ax2.legend(UseNutrients)
+ax2.axhline(0)
+ax2.set_xlabel("Price of %s" % USE_GOOD)
+#+end_src
+
+#+begin_src ipython
+fig, ax1 = plt.subplots()
+
+ax1.plot(P,[compensating_variation(U0,p,my_prices(p0)) for p0 in P])
+ax1.set_xlabel("Price of %s" % USE_GOOD)
+ax1.set_ylabel("Compensating Variation")
+
+ax1.plot(P,[revenue(U0,p,my_prices(p0)) for p0 in P],'k')
+ax1.legend(('Compensating Variation','Revenue'))
+ax1.axhline(0)
+ax1.axvline(p.loc[USE_GOOD])
+
+#+end_src
+
+
+
+
 

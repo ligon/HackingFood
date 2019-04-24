@@ -1,0 +1,99 @@
+* Preface
+
+First, install =CFEDemand= package if necessary:
+#+begin_src ipython 
+!pip install CFEDemands --upgrade
+
+#+end_src
+
+* Compensated Policy Experiments
+
+Compare Marshallian (uncompensated) and Hicksian (compensated)
+demands:
+
+#+begin_src ipython
+from costs_preface import *
+
+#USE_GOOD = 'Rice'
+USE_GOOD = 'Milk'
+
+U0 = r.indirect_utility(x0,p)
+
+plt.plot([r.demands(x0,my_prices(p0,i=USE_GOOD))[USE_GOOD] for p0 in P],P)
+plt.plot([r.demands(U0,my_prices(p0,i=USE_GOOD),type="Hicksian")[USE_GOOD] for p0 in P],P)
+plt.ylabel('Price')
+plt.xlabel(USE_GOOD)
+plt.axhline(p.sel(i=USE_GOOD).values)
+plt.legend(("Marshallian","Hicksian"))
+#+end_src
+
+
+Define some useful functions for measuring costs:
+#+begin_src ipython :results silent
+def compensating_variation(U0,p0,p1):
+    x0 = r.expenditure(U0,p0)
+    x1 = r.expenditure(U0,p1)
+
+    return x1-x0
+
+def revenue(U0,p0,p1,type='Marshallian'):
+    """(Un)Compensated revenue from taxes changing vector of prices from p0 to p1.
+
+    Note that this is only for *demand* side (i.e., if supply perfectly elastic).
+    """
+    
+    dp = p1 - p0 # Change in prices
+
+    return dp.T@r.demands(U0,p1,type=type)
+
+
+def deadweight_loss(U0,p0,p1):
+    """
+    Deadweight loss of tax/subsidy scheme creating wedge in prices from p0 to p1.
+
+    Note that this is only for *demand* side (i.e., if supply perfectly elastic).
+    """
+    cv = compensating_variation(U0,p0,p1)
+
+    return revenue(U0,p0,p1,type='Hicksian') - cv
+    
+    
+def compensated_nutrient_demand(U,p,z=None):
+    c = r.demands(U,p,z=z,type='Hicksian')
+    fct0,c0 = fct.align(c,axis=0,join='inner')
+    N = fct0.T@c0
+
+    return N
+
+def compensated_nutrient_adequacy_ratio(U,p):
+    return compensated_nutrient_demand(U,p)/hh_rda
+
+#+end_src
+
+#+begin_src ipython
+fig,ax2 = plt.subplots()
+ax2.set_ylabel('log NAR')
+ax2.plot(P,[np.log(compensated_nutrient_adequacy_ratio(U0,my_prices(p0))[UseNutrients]) for p0 in P])
+ax2.legend(UseNutrients)
+ax2.axhline(0)
+ax2.set_xlabel("Price of %s" % USE_GOOD)
+#+end_src
+
+#+begin_src ipython
+fig, ax1 = plt.subplots()
+
+ax1.plot(P,[compensating_variation(U0,p,my_prices(p0)) for p0 in P])
+ax1.set_xlabel("Price of %s" % USE_GOOD)
+ax1.set_ylabel("Compensating Variation")
+
+ax1.plot(P,[revenue(U0,p,my_prices(p0)) for p0 in P],'k')
+ax1.legend(('Compensating Variation','Revenue'))
+ax1.axhline(0)
+ax1.axvline(p.loc[USE_GOOD])
+
+#+end_src
+
+
+
+
+
