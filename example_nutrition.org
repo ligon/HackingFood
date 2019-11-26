@@ -27,10 +27,10 @@ period, but this is a matter of choice.
 t = r.firstround  # First round
 m = r.coords['m'][0] # First market
 
-x = r.get_predicted_expenditures().sum('i')
+x = r.y.sum('i')
 x = x.where(x>0).sel(t=t,m=m).median('j') # Budget (median household)
 
-# Note selection of prices for 1975 for market A
+# Note selection of prices for first market in first period
 p = r.prices.sel(t=t,m=m).fillna(1).copy()
 
 p.to_dataframe().fillna(1).squeeze()
