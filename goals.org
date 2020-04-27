@@ -108,7 +108,7 @@ desirability or nutritional content of food.
    Each team will be responsible for giving a 15 minute presentation
    of the work they've accomplished during the sprint.  Be creative!
    Think of awesome new ways to help others visualize what you've
-   learned. 
+   learned.  
 
 ** [#A] Replication & Discussion
 
