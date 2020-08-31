@@ -1,0 +1,142 @@
+
+* Preface
+#+begin_src ipython
+import cfe
+import matplotlib.pyplot as plt
+
+r = cfe.result.from_dataset('Indian ICRISAT.ds')
+UseNutrients=['Protein','Calories','Iron']
+#+end_src
+* Nutritional requirements                                       
+
+Individuals have nutritional requirements established by nutrition
+scientists.  Here are some standards established by the Indian
+National Institute of Nutrition:
+
+** Nutritional needs of individuals
+
+*** Recommended Daily Allowances: India
+ #+name: rda
+ | Sex-Age | Calories | Protein | Fat | Calcium | Iron | Betacarotene | Thiamine | Riboflavin | Niacin | Ascorbic Acid |
+ |---------+----------+---------+-----+---------+------+--------------+----------+------------+--------+---------------|
+ | C 0-0.5 |          |         |     |     500 |      |              |       .2 |         .3 |        |            25 |
+ | C 0.5-1 |          |         |  19 |     500 |    5 |         2800 |       .3 |         .4 |        |            25 |
+ | C 1-3   |     1060 |    16.7 |  27 |     600 |    9 |         3200 |       .5 |         .6 |      8 |            40 |
+ | C 4-6   |     1350 |    20.1 |  25 |     600 |   13 |         3200 |       .7 |         .8 |     11 |            40 |
+ | C 7-9   |     1690 |    29.5 |  30 |     600 |   16 |         4800 |       .8 |         1. |     13 |            40 |
+ | B 10-12 |     2190 |    39.9 |  35 |     800 |   21 |         4800 |      1.1 |        1.3 |     15 |            40 |
+ | G 10-12 |     2010 |    40.4 |  35 |     800 |   27 |         4800 |       1. |        1.2 |     13 |            40 |
+ | B 13-15 |     2750 |    54.3 |  45 |     800 |   32 |         4800 |      1.4 |        1.6 |     16 |            40 |
+ | G 13-15 |     2330 |    51.9 |  40 |     800 |   27 |         4800 |      1.2 |        1.4 |     14 |            40 |
+ | B 16-17 |     3020 |    61.5 |  50 |     800 |   28 |         4800 |      1.5 |        1.8 |     17 |            40 |
+ | G 16-17 |     2440 |    55.5 |  35 |     800 |   26 |         4800 |       1. |        1.2 |     14 |            40 |
+ | M       |     2730 |      60 |  30 |     600 |   17 |         4800 |      1.4 |        1.4 |     18 |            40 |
+ | W       |     2230 |      55 |  25 |    1200 |   21 |         4800 |      1.1 |        1.3 |     14 |            40 |
+
+*** Recommended Daily Allowances: Tanzania                         :noexport:
+
+| Sex-Age | Calories |   Protein | Vitamin A | Vitamin B6 | Vitamin B12 | Vitamin C | Vitamin D | Vitamin E | Calcium |   Iron | Magnesium |  Zinc |
+|---------+----------+-----------+-----------+------------+-------------+-----------+-----------+-----------+---------+--------+-----------+-------|
+| C 0-2   |      680 |     13.05 |    395833 |       0.35 |       0.725 |     28.75 |         5 |      3850 |   437.5 |  4.325 |     51.25 | 3.775 |
+| C 2-5   |      900 |      13.8 |    400000 |       0.55 |        1.05 |        30 |         5 |      5000 |     550 |   5.05 |        68 |  4.45 |
+| C 6-9   |     1260 | 19.581875 |    400000 |        0.9 |        1.65 |     33.75 |         5 |      6500 |     675 |  6.875 |        94 |   5.4 |
+| C 10-14 |     1650 |   31.4712 |    400000 |       1.35 |        2.43 |      38.5 |         5 |      8400 |     840 |   9.22 |       128 |  6.65 |
+| C 15-17 |     2020 |    42.126 |    400000 |       1.67 |           3 |     41.67 |         5 |      9670 |  966.67 | 10.867 |    153.33 |   7.6 |
+| Men     |     2800 |   45.8344 |    600000 |        1.5 |         2.4 |        45 |         5 |     10000 |    1150 |      9 |       260 |     7 |
+| Women   |     2290 |   45.8344 |    500000 |        1.4 |         2.4 |        45 |         5 |      5000 |    1150 |     20 |       220 |   4.9 |
+
+#+begin_src ipython :var RDA=rda :colnames no :exports none :results silent
+rda=pd.DataFrame([x[1:] for x in RDA[1:]],columns=RDA[0][1:],index=[x[0] for x in RDA[1:]])
+rda.to_pickle(DIR+'rda.df')
+#+end_src
+
+** Nutritional Needs of Households
+   Our data on demand and nutrients is at the /household/ level; we
+   can't directly compare household level nutrition with individual
+   level requirements.  What we *can* do is add up minimum individual
+   requirements, and see whether household total exceed these.  This
+   isn't a guarantee that all individuals have adequate nutrition
+   (since the way food is allocated in the household might be quite
+   unequal, or unrelated to individual requirements), but it is
+   /necessary/ if all individuals are to have adequate nutrition.
+
+   For the average household in the ICRISAT villages, the number of
+   different kinds of people can be computed by averaging over households:
+#+begin_src ipython :results silent
+# In first round, averaged over households and villages
+
+zbar = r.z.sel(t=r.firstround,drop=True).mean(['j','m'])[:-1].squeeze() # Leave out log HSize
+
+zbar = zbar.to_dataframe().squeeze()
+#+end_src
+
+Now, the inner/dot/matrix product between =zbar= and the =rda=
+DataFrame of requirements will give us minimum requirements for the
+average household:
+#+begin_src ipython
+rda = pd.read_pickle('indian_rda.df').T
+
+# May need to tweak types to match RDA and zbar types:
+zbar['C 0-3'] = zbar['M 0-3'] + zbar['F 0-3']
+zbar['C 4-8'] = zbar['M 4-8'] + zbar['F 4-8']
+zbar['M'] = zbar['M 19-30'] + zbar['M 31-50'] + zbar['M 51+']
+zbar['F'] = zbar['F 19-30'] + zbar['F 31-50'] + zbar['F 51+']
+zbar = zbar[['C 0-3','C 4-8','M 9-13','F 9-13','M 14-18','F 14-18','M','F']]
+
+rda['C 0-3'] = rda['C 0-0.5'] + rda['C 0.5-1'] + rda['C 1-3']
+rda['C 4-8'] = rda['C 4-6'] + rda['C 7-9']
+rda['M 9-13'] = rda['B 10-12']
+rda['F 9-13'] = rda['G 10-12']
+rda['M 14-18'] = rda['B 13-15'] + rda['B 16-17']
+rda['F 14-18'] = rda['G 13-15'] + rda['G 16-17']
+rda['F'] = rda['W']
+
+rda = rda[['C 0-3','C 4-8','M 9-13','F 9-13','M 14-18','F 14-18','M','F']]
+
+# This matrix product gives minimum nutrient requirements for average
+# household in 1975
+hh_rda = rda.replace('',0).T@zbar
+hh_rda
+#+end_src
+
+* Nutritional Adequacy of Food Demands
+Since we can trace out demands for nutrients as a function of $(x,p)$,
+and we've computed minimum nutritional requirements for the average
+household, we can /normalize/ nutritional intake to check the adequacy
+of diet.
+#+begin_src ipython :results silent
+def nutrient_adequacy_ratio(x,pscale=None):
+    return nutrient_demand(x,pscale=pscale)/hh_rda
+#+end_src
+
+In terms of normalized nutrients, any household with more than one
+unit of any given nutrient (or zero in logs) will be consuming a
+minimally adequate level of the nutrient; below this level there's
+clearly nutritional inadequacy.  For this reason the ratio of
+actual nutrients to required nutrients is termed the "nutrient
+adequacy ratio," or NAR.
+
+#+begin_src ipython
+plt.plot(X,pd.concat({x:np.log(nutrient_adequacy_ratio(x,p))[UseNutrients] for x in X},axis=1).T)
+plt.legend(UseNutrients)
+plt.xlabel('log budget')
+plt.ylabel('log nutrient adequacy ratio')
+plt.axhline(0)
+#+end_src
+
+
+
+As before, we can also vary relative prices.  Here we trace out
+nutritional adequacy varying the price of a single good:
+#+begin_src ipython
+poorer_x = x/2
+
+plt.plot(pd.concat({p0:np.log(nutrient_adequacy_ratio(poorer_x,my_prices(p0,i=USE_GOOD)))[UseNutrients] for p0 in P},axis=1).T,P)
+plt.legend(UseNutrients)
+plt.ylabel('Price')
+plt.xlabel('log nutrient adequacy ratio')
+plt.axvline(0)
+plt.axhline(p.sel(i=USE_GOOD).values)
+#+end_src
+
+
