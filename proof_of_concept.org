@@ -1,0 +1,245 @@
+* Proof of Concept
+  :PROPERTIES:
+  :EXPORT_FILE_NAME: ../Materials/Project4/proof_of_concept.ipynb
+  :END:
+
+** Preface
+  This file is meant to basically check the sanity and correctness of
+  the data and code used to work out nutrition from household
+  expenditure data.
+
+  There are a few modules you may need to install:
+#+begin_src ipython
+#!pip install CFEDemands --upgrade
+#!pip install xarray
+#!pip install dvc[gdrive]
+#!pip install h5netcdf
+#+end_src
+
+  All the data required for estimation and calculation can be found
+  in a google spreadsheet.  Choose one to explore!
+#+begin_src ipython
+COUNTRY = 'Uganda'
+#+end_src
+
+#+begin_src ipython
+URL = {'Uganda':'https://docs.google.com/spreadsheets/d/1yVLriVpo7KGUXvR3hq_n53XpXlD5NmLaH1oOMZyV0gQ/',
+       'ICRISAT':'https://docs.google.com/spreadsheets/d/13Ig5hZif-NSHtgkKRp_cEgKXk0lOsdUB2BAD6O_FnRo'}
+DAYS_PER_PERIOD = {'Uganda':7,'ICRISAT':365.25} # Number of days of expenditure recall
+#+end_src
+
+
+To read the various sheets, we'll need some credentials.  Point to an
+unencrypted json file that has the appropriate permissions:
+#+begin_src ipython
+my_creds = '../students.json'
+#+end_src
+
+** Estimation
+   First, we pull in data and estimate CFE demands /given/ the prices
+   and budgets of households in the data.
+
+#+begin_src ipython 
+import cfe
+import numpy as np
+from eep153_tools import read_sheets
+
+x = read_sheets(URL[COUNTRY],json_creds=my_creds,sheet='Expenditures').set_index(['j','t','m'])
+x.columns.name = 'i'
+x = x.replace(0,np.nan)
+y = np.log(x)
+
+z = read_sheets(URL[COUNTRY],json_creds=my_creds,sheet='HH Characteristics').set_index(['j','t','m'])
+z.columns.name = 'k'
+
+p = read_sheets(URL[COUNTRY],json_creds=my_creds,sheet='Prices').set_index(['t','m'])
+p.columns.name = 'i'
+
+r = cfe.Result(y=y,z=z,prices=p)
+
+r.get_alpha()
+xhat = r.get_predicted_expenditures()
+#+end_src
+
+Estimation is kind of expensive, so you might want to save these
+results to use in your later code.
+#+begin_src ipython
+r.to_dataset("my %s.ds" % COUNTRY)
+#+end_src
+
+** Plotting Food Demands
+   Now we're interested in predicting what quantities of different
+   kinds of food /would/ have been, if something (e.g., a price,
+   budget, household characteristics) was different.
+
+*** Ceteris paribus
+   We begin by setting up some benchmarks for prices and budgets, so
+   the things we don't want to change we can hold fixed.
+ #+begin_src ipython
+### First year, first market, and some good.  Change if you wish! ###
+my_t = r.coords['t'].data.flatten()[0]
+my_m = r.coords['m'].data.flatten()[0]
+my_i = r.coords['i'].data.flatten()[0]
+#####################################################################
+
+p = r.prices.sel(t=my_t,m=my_m,drop=True)
+phat = p.to_dataframe('i').dropna()
+
+def my_prices(p0,p=phat,i=my_i):
+    """
+    Set price of good i to p0, holding remaining prices fixed at values in p.
+    """
+    p = p.copy()
+    p.loc[i] = p0
+    return p.squeeze()
+ #+end_src
+
+ So, we have a budget for median household at that time and place
+#+begin_src ipython
+xbar = r.get_predicted_expenditures().sum('i')
+median_x = xbar.where(xbar>0).sel(t=my_t,m=my_m).median('j') # Budget (median household)
+#+end_src
+
+*** Plot demand schedule
+#+begin_src ipython
+import matplotlib.pyplot as plt
+%matplotlib inline
+
+# Values for prices
+ref_price = r.prices.sel(i=my_i,t=my_t,m=my_m)
+P = np.linspace(ref_price/5,ref_price*5,50)
+
+for x in [median_x*s for s in [.25,.5,1.,2,4]]:
+    plt.plot([r.demands(x,my_prices(p0))[my_i] for p0 in P],P)
+
+plt.xlabel(my_i)
+plt.ylabel('Price of %s' % my_i)
+#+end_src
+** Plotting Nutrient Demands
+   The nutrient value of food consumed by the household is just the
+   product of its diet and a food conversion table.  So let's write a
+   function that describes that product:
+ #+begin_src ipython
+# Get FCT:
+fct = read_sheets(URL[COUNTRY],
+                  json_creds='../students.json',
+                  sheet='FCT').set_index('i')
+fct.columns.name='n'
+
+def nutrient_demand(x,p):
+    c = r.demands(x,p)
+    fct0,c0 = fct.align(c,axis=0,join='inner')
+    N = fct0.T@c0
+
+    N = N.loc[~N.index.duplicated()]
+    
+    return N
+ #+end_src
+
+ With this =nutrient_demand= function in hand, we can see how nutrient
+ outcomes vary with budget, given prices:
+ #+begin_src ipython
+import numpy as np
+import pandas as pd
+
+### If you're getting lots of not useful warnings you want to ignore
+# import warnings
+# warnings.filterwarnings('ignore',category=UserWarning)
+####################################################################
+
+X = np.linspace(median_x/5,median_x*5,50)
+
+# UseNutrients = ['Protein','Calories','Iron','Calcium']
+UseNutrients = fct.columns.tolist()
+
+plt.plot(X,pd.concat({x:np.log(nutrient_demand(x,p))[UseNutrients] for x in X},axis=1).T)
+plt.legend(UseNutrients)
+plt.xlabel('log budget')
+plt.ylabel('log nutrient')
+ #+end_src
+
+
+** Nutritional requirements                                         
+
+ Individuals have nutritional requirements established by nutrition
+ scientists.  Here we grab one such set of requirements:
+ #+begin_src ipython
+rdi = read_sheets(URL[COUNTRY],
+                  json_creds='../students.json',
+                  sheet='RDI').set_index('n').replace(np.nan,0)
+rdi.columns.name = 'k'
+
+rdi = rdi.replace('',0)
+rdi
+ #+end_src
+
+*** Nutritional Needs of Households
+    Our data on demand and nutrients is at the /household/ level; we
+    can't directly compare household level nutrition with individual
+    level requirements.  What we *can* do is add up minimum individual
+    requirements, and see whether household total exceed these.  This
+    isn't a guarantee that all individuals have adequate nutrition
+    (since the way food is allocated in the household might be quite
+    unequal, or unrelated to individual requirements), but it is
+    /necessary/ if all individuals are to have adequate nutrition.
+
+    For the average household, the number of different kinds of people
+    can be computed by averaging over households:
+ #+begin_src ipython :results silent
+# Find average household characteristics for reference period & place
+zbar = r.z.sel(t=my_t,m=my_m,drop=True).mean('j').to_dataframe()
+ #+end_src
+
+ Now, the inner/dot/matrix product between =zbar= and the =rda=
+ DataFrame of requirements will give us minimum requirements for the
+ average household:
+ #+begin_src ipython
+
+# This matrix product gives minimum nutrient requirements for average
+# household in reference year & place
+my_rdi,my_zbar = rdi.align(zbar.T,axis=1,join='inner')
+hh_rdi = my_rdi@my_zbar.T
+
+# But this is per *day*, while our data is per period:
+hh_rdi = hh_rdi*DAYS_PER_PERIOD[COUNTRY]
+hh_rdi
+ #+end_src
+
+*** Nutritional Adequacy of Food Demands                            
+ Since we can trace out demands for nutrients as a function of $(x,p)$,
+ and we've computed minimum nutritional requirements for the average
+ household, we can /normalize/ nutritional intake to check the adequacy
+ of diet.
+ #+begin_src ipython :results silent
+def nutrient_adequacy_ratio(x,p):
+    return (nutrient_demand(x,p)/hh_rdi.T).squeeze()
+ #+end_src
+
+ In terms of normalized nutrients, any household with more than one
+ unit of any given nutrient (or zero in logs) will be consuming a
+ minimally adequate level of the nutrient; below this level there's
+ clearly nutritional inadequacy.  For this reason the ratio of
+ actual nutrients to required nutrients is termed the "nutrient
+ adequacy ratio," or NAR.
+
+ #+begin_src ipython
+plt.plot(X,pd.concat({x:np.log(nutrient_adequacy_ratio(x,p))[UseNutrients] for x in X},axis=1).T)
+plt.legend(UseNutrients)
+plt.xlabel('log budget')
+plt.ylabel('log nutrient adequacy ratio')
+plt.axhline(0)
+ #+end_src
+
+ As before, we can also vary relative prices.  Here we trace out
+ nutritional adequacy varying the price of a single good:
+ #+begin_src ipython
+poorer_x = median_x/2
+
+plt.plot(pd.concat({p0:np.log(nutrient_adequacy_ratio(poorer_x,my_prices(p0,i=my_i)))[UseNutrients] for p0 in P},axis=1).T,P)
+plt.legend(UseNutrients)
+plt.ylabel('Price')
+plt.xlabel('log nutrient adequacy ratio')
+plt.axvline(0)
+plt.axhline(p.sel(i=my_i).values)
+ #+end_src
+
