@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 #+EXPORT_FILE_NAME: ../Materials/Project4/example_nutrition.ipynb
 * Preface
 First, if you don't already have the latest version of the =cfe= package
@@ -9,197 +10,185 @@ installed, grab it, along with some dependencies:
 #+end_src
 
 Second, load relevant dataset:
-#+begin_src ipython
-import cfe
+=======
+* Nutrient Demands
+  :PROPERTIES:
+  :EXPORT_FILE_NAME: ../Materials/Project4/example_nutrition_demands.ipynb
+  :END:
+** Introduction
+ In our last project we used data to estimate systems of food demand
+ using different datasets.  An output from that project was as set of
+ =cfe.Result= objects; these bundle together both data and the results
+ from the demand system estimation, and can be used for prediction as
+ well.  
 
-# Results can be made persistent by saving them, and then re-loading...
+ Here we'll explore some of the uses of the =cfe.Result= class, using
+ an instance created using data from the Indian ICRISAT data.
+
+ If you don't already have the latest version of the =cfe= package
+ installed, grab it, along with some dependencies:
+ #+begin_src ipython
+!pip install CFEDemands --upgrade
+#!pip install xarray
+#!pip install dvc
+#!pip install h5netcdf
+ #+end_src
+
+ #+begin_src ipython :results silent
+import pandas as pd
+import cfe
+ #+end_src
+
+ We'll get data from two places.  First, basic data, including a food
+ conversion table and recommended daily intakes table can be found in
+ a google spreadsheet.  
+>>>>>>> update
+#+begin_src ipython
+DataURL = 'https://docs.google.com/spreadsheets/d/13Ig5hZif-NSHtgkKRp_cEgKXk0lOsdUB2BAD6O_FnRo'
+key = DataURL.split('/')[-1]
+#+end_src
+You'll also need to be sure that your credentials are decrypted:
+#+begin_src ipython
+!gpg --batch --passphrase "SECRET PASSPHRASE" -d ../students.json.gpg > ../students.json
+#+end_src
+ An instance =r= of =cfe.Result= can be made persistent with
+ =r.to_dataset('my_result.ds')=, which saves the instance "on disk" in
+ [[https://en.wikipedia.org/wiki/NetCDF][NetCDF format]], and can be loaded using =cfe.from_dataset=.  We use
+ this method below to load data and demand system estimated for the
+ Indian ICRISAT villages:
+#+begin_src ipython
 r = cfe.from_dataset('./Indian ICRISAT_small.ds')
 
-r['alpha'] = r.alpha.loc[r.alpha>0]  # Insist on alpha positive
-#+end_src
+r
+ #+end_src
 
-* Choosing reference prices, budget, and units
+ Pick prices that were prevailing at some time and place; e.g.,
+ #+begin_src ipython
+# Year 1975, village A
+t,m = 75,1
 
-We'll want to choose reference prices (a choice of =t= and =m=) and
-units (=u=).  You can examine possibilities by looking at:
-#+begin_src ipython
-r.prices.coords
-#+end_src
+p = r.prices.sel(t=t,m=m,drop=True)
+phat = p.to_dataframe('i').dropna()
+phat
+ #+end_src
 
-Below we choose first market in first period, but this is a matter of
-choice.  We also choose prices for goods measured in 'Kilograms'; this
-may vary with the dataset.  To inspect possible units look at:
+ So, we have demands for median household at that time and place
+ #+begin_src ipython
+xbar = r.get_predicted_expenditures().sum('i')
+median_x = xbar.where(xbar>0).sel(t=t,m=m).median('j') # Budget (median household)
 
-#+begin_src ipython :results silent
-t = r.firstround  # First round
-m = r.coords['m'][0] # First market
+xhat = r.get_predicted_expenditures().sel(t=t,m=m,drop=True).mean('j')
 
-# Get median budget
-x = r.get_predicted_expenditures().sum('i')
-medianx = x.where(x>0).sel(t=t,m=m).median('j').values
+xhatdf = xhat.to_dataframe('i').dropna()
 
-# Note selection of prices for first market in first period for /kgs/.
-# For goods never measured in kgs prices will be missing. 
-p = r.prices.sel(t=t,m=m,u='Kilograms',drop=True).to_dataframe().squeeze().dropna()
-p
-#+end_src
+qhat = xhatdf.div(phat,axis=1).dropna()
 
-And with $(x,p)$ defined we can calculate example demands:
-#+begin_src ipython
-# Expenditures divided by reference prices per Kilogram
-c=(r.demands(medianx)/p).dropna()
-c
-#+end_src
+qhat
+ #+end_src
 
+ Finally, define a function to change a single price in the vector $p$:
+ #+begin_src ipython :results silent
+def my_prices(p0,p=p,i='Coconut'):
+    p = p.copy()
+    p.loc[i] = p0
+    return p
+ #+end_src
 
-* Mapping to Nutrients
+** Mapping to Nutrients
 
-We've seen how to map prices and budgets into vectors of consumption
-quantities using =cfe.Result.demands=.  Next we want to think about
-how to map these into bundles of /nutrients/.  The information needed
-for the mapping comes from a "Food Conversion Table" (or database,
-such as the [[https://fdc.nal.usda.gov/][USDA Food Central Database]]).   Here we've adapted (with
-thanks to Alessandro Tarozzi of the Universitat Pompeu Fabra) a food
-conversion table developed by Gopalan et al (1980) to the foods
-reported in the Indian ICRISAT data:
+ We've seen how to map prices and budgets into vectors of consumption
+ quantities using =cfe.Result.demands=.  Next we want to think about
+ how to map these into bundles of /nutrients/.  The information needed
+ for the mapping comes from a "Food Conversion Table" (or database,
+ such as the [[https://ndb.nal.usda.gov/ndb/doc/apilist/API-FOOD-REPORTV2.md][USDA Nutrition DataBase]]).   Here we've adapted (with
+ thanks to Alessandro Tarozzi of the Universitat Pompeu Fabra) a food
+ conversion table developed by Gopalan et al (1980) to the foods
+ reported in the Indian ICRISAT data:
+ #+begin_src ipython
+import eep153_tools
 
-#+begin_src ipython 
-import pandas as pd
-import numpy as np
+fct = eep153_tools.read_sheets(key,
+                               json_creds='../students.json',
+                               sheet='FCT').set_index('i')
 
-# The function below adapted from Gianmario Spacagna's suggestion at
-# https://stackoverflow.com/questions/19611729/getting-google-spreadsheet-csv-into-a-pandas-dataframe
-def dataframe_from_gspreadsheet(sheet_name, key):
-    """Transform public google spreadsheet into pandas.DataFrame."""
-    
-    url = 'https://docs.google.com/spreadsheets/d/{key}/gviz/tq?tqx=out:csv&sheet={sheet_name}&headers=1'.format(
-        key=key, sheet_name=sheet_name.replace(' ', '%20'))
-
-    df = pd.read_csv(url)
-
-    return df.drop([col for col in df.columns if col.startswith('Unnamed')], axis=1)
-
-# Change 'ICRISAT' sheet id to that of your own sheet
-fct = dataframe_from_gspreadsheet("FCT", '13Ig5hZif-NSHtgkKRp_cEgKXk0lOsdUB2BAD6O_FnRo')
+ #+end_src
 
 
-# Change some labels
-d={'protein':'Protein',
-   'protein g':'Protein',
-   'fat':'Fat',
-   'energy_kcal':'Calories',
-   'energy kcal':'Calories',
-   'calcium':'Calcium',
-   'ca mg':'Calcium',
-   'betacarotene':'Betacarotene',
-   'thiamine':'Thiamine',
-   'riboflavin':'Riboflavin',
-   'niacin':'Niacin',
-   'iron':'Iron',
-   'fe mg':'Iron',
-   'ascorbic_total':'Ascorbic Acid',
-   'vit a ug':'Vitamin A',
-   'vit b6 mg':'Vitamin B6',
-   'vit b12 ug':'Vitamin B12',
-   'vit d ug':'Vitamin D',
-   'vit e ug':'Vitamin E',
-   'vit c mg':'Vitamin C',
-   'mg mg':'Magnesium',
-   'zn mg':'Zinc'}
-
-fct = fct.rename(columns=d) #[list(d.values())]
-
-# Fix capitalization (to match food labels)
-fct.index = fct.reset_index()['i'].str.title()
-del fct['i']
-del fct['ext_source']
-
-# Replace missing with zeros
-fct = fct.fillna(0)
-
-try:
-    fct.index = fct.index.droplevel('u')
-except (AttributeError,KeyError):
-    pass # No units?
-
-fct.columns
-#+end_src
-
-We need the index of the Food Conversion Table (FCT) to match up with
-the index of the vector of quantities demanded.   To manage this we
-make use of the =align= method for =pd.DataFrames=:
-#+begin_src ipython 
+ We need the index of the Food Conversion Table (FCT) to match up with
+ the index of the vector of quantities demanded.   To manage this we
+ make use of the =align= method for =pd.DataFrames=:
+ #+begin_src ipython 
 
 # Create a new FCT and vector of consumption that only share rows in common:
-fct0,c0 = fct.align(c,axis=0,join='inner')
+fct0,c0 = fct.align(qhat,axis=0,join='inner')
 print(fct0.index)
-#+end_src
+ #+end_src
 
+ Now, since rows of =fct0= and =c0= match, we can obtain nutritional
+ outcomes from the inner (or dot, or matrix) product of the transposed
+ =fct0= and =c0=:
 
-Now, since rows of =fct0= and =c0= match, we can obtain nutritional
-outcomes from the inner (or dot, or matrix) product of the transposed
-=fct0= and =c0=:
-
-#+begin_src ipython
+ #+begin_src ipython
 # The @ operator means matrix multiply
 N = fct0.T@c0
+
+# NB: ICRISAT data is *Annual* consumption
 N
-#+end_src
+ #+end_src
 
-Of course, since we can compute the nutritional content of a vector of
-consumption goods =c0=, we can also use our demand functions to
-compute nutrition as a /function/ of prices and budget.  
+ Of course, since we can compute the nutritional content of a vector of
+ consumption goods =c0=, we can also use our demand functions to
+ compute nutrition as a /function/ of prices and budget.  
 
-#+begin_src ipython
-def nutrient_demand(x,pscale=None,p=p):
-    c = (r.demands(x,p=pscale)/p).dropna()
+ #+begin_src ipython
+def nutrient_demand(x,p):
+    c = r.demands(x,p)
     fct0,c0 = fct.align(c,axis=0,join='inner')
     N = fct0.T@c0
 
+    N = N.loc[~N.index.duplicated()]
+    
     return N
-#+end_src
+ #+end_src
 
-With this =nutrient_demand= function in hand, we can see how nutrient
-outcomes vary with budget, given prices:
-#+begin_src ipython
+ With this =nutrient_demand= function in hand, we can see how nutrient
+ outcomes vary with budget, given prices:
+ #+begin_src ipython
 import numpy as np
 import matplotlib.pyplot as plt
 
-X = np.linspace(medianx/5,medianx*5,50).tolist()
+### If you're getting lots of not useful warnings you want to ignore
+# import warnings
+# warnings.filterwarnings('ignore',category=UserWarning)
+####################################################################
+
+X = np.linspace(median_x/5,median_x*5,50)
 
 UseNutrients = ['Protein','Calories','Iron','Calcium']
 
-# Use reference prices
-logN={}
-for myx in X:
-    logN[myx] = np.log(nutrient_demand(myx)[UseNutrients])
-    
-logN = pd.concat(logN,axis=1).T
-
-plt.plot(X,logN)
+plt.plot(X,pd.concat({myx:np.log(nutrient_demand(myx,p))[UseNutrients] for myx in X},axis=1).T)
 plt.legend(UseNutrients)
 plt.xlabel('log budget')
 plt.ylabel('log nutrient')
-#+end_src
+ #+end_src
 
 
-Now how does nutrition vary with prices at median income?
+ Now how does nutrition vary with prices?
 
-#+begin_src ipython
-# Choose some good from your dataset
-USE_GOOD = 'Milk'
+ #+begin_src ipython
+USE_GOOD = 'Jowar/Sorghum'
+
+ref_price = r.prices.sel(i=USE_GOOD,t=t,m=m,drop=True)
 
 P = np.linspace(1,5,20).tolist()
 
-plt.plot(pd.concat({p0:np.log(nutrient_demand(medianx,pscale={USE_GOOD:p0})[UseNutrients]) for p0 in P},axis=1).T,P)
+plt.plot(P,pd.DataFrame({p0:np.log(nutrient_demand(median_x,my_prices(p0,i=USE_GOOD)))[UseNutrients] for p0 in P}).T)
 plt.legend(UseNutrients)
-plt.ylabel('Price')
-plt.xlabel('log Nutrient')
-#+end_src
+plt.xlabel('log price')
+plt.ylabel('log nutrient')
+ #+end_src
 
-* Nutritional Adequacy
-
-** Nutritional requirements                                       
+* Nutritional requirements                                         
 
  Individuals have nutritional requirements established by nutrition
  scientists.  Here are some standards established by the Indian
@@ -238,7 +227,7 @@ plt.xlabel('log Nutrient')
 
 #+begin_src ipython :var RDA=rda :colnames no :exports none :results silent
 rda=pd.DataFrame([x[1:] for x in RDA[1:]],columns=RDA[0][1:],index=[x[0] for x in RDA[1:]])
-rda.to_pickle(DIR+'rda.df')
+rda.to_pickle('rda.df')
 #+end_src
 
 ** Nutritional Needs of Households
@@ -255,51 +244,33 @@ rda.to_pickle(DIR+'rda.df')
    different kinds of people can be computed by averaging over households:
 #+begin_src ipython :results silent
 # In first round, averaged over households and villages
-
-zbar = r.z.sel(t=r.firstround,drop=True).mean(['j','m'])[:-1].squeeze() # Leave out log HSize
-
-zbar = zbar.to_dataframe().squeeze()
+zbar = r.z.sel(t=r.firstround,drop=True).mean(['j','m'])[:-1] # Leave out log HSize
 #+end_src
 
 Now, the inner/dot/matrix product between =zbar= and the =rda=
 DataFrame of requirements will give us minimum requirements for the
 average household:
 #+begin_src ipython
-rda = pd.read_pickle('indian_rda.df').T
-
-# May need to tweak types to match RDA and zbar types:
-zbar['C 0-3'] = zbar['M 0-3'] + zbar['F 0-3']
-zbar['C 4-8'] = zbar['M 4-8'] + zbar['F 4-8']
-zbar['M'] = zbar['M 19-30'] + zbar['M 31-50'] + zbar['M 51+']
-zbar['F'] = zbar['F 19-30'] + zbar['F 31-50'] + zbar['F 51+']
-zbar = zbar[['C 0-3','C 4-8','M 9-13','F 9-13','M 14-18','F 14-18','M','F']]
-
-rda = rda.replace('',0)
-
-rda['C 0-3'] = rda['C 0-0.5'] + rda['C 0.5-1'] + rda['C 1-3']
-rda['C 4-8'] = rda['C 4-6'] + rda['C 7-9']
-rda['M 9-13'] = rda['B 10-12']
-rda['F 9-13'] = rda['G 10-12']
-rda['M 14-18'] = rda['B 13-15'] + rda['B 16-17']
-rda['F 14-18'] = rda['G 13-15'] + rda['G 16-17']
-rda['F'] = rda['W']
-
-rda = rda[['C 0-3','C 4-8','M 9-13','F 9-13','M 14-18','F 14-18','M','F']]
+rdi = eep153_tools.read_sheets(key,
+                               json_creds='../students.json',
+                               sheet='RDI').set_index('k').replace(np.nan,0)
 
 # This matrix product gives minimum nutrient requirements for average
-# household in 1975
-hh_rda = rda@zbar
-hh_rda
+# household in 1975.
+hh_rdi = rdi.replace('',0).T@zbar
+
+# But this is per *day*, while our ICRISAT food data is per *year*:
+hh_rdi = hh_rdi*365.25
 #+end_src
 
-* Nutritional Adequacy of Food Demands
+* Nutritional Adequacy of Food Demands                            
 Since we can trace out demands for nutrients as a function of $(x,p)$,
 and we've computed minimum nutritional requirements for the average
 household, we can /normalize/ nutritional intake to check the adequacy
 of diet.
 #+begin_src ipython :results silent
-def nutrient_adequacy_ratio(x,pscale=None):
-    return nutrient_demand(x,pscale=pscale)/hh_rda
+def nutrient_adequacy_ratio(x,p):
+    return nutrient_demand(x,p)/hh_rdi
 #+end_src
 
 In terms of normalized nutrients, any household with more than one
@@ -317,6 +288,17 @@ plt.ylabel('log nutrient adequacy ratio')
 plt.axhline(0)
 #+end_src
 
+As before, we can also vary relative prices.  Here we trace out
+nutritional adequacy varying the price of a single good:
+#+begin_src ipython
+poorer_x = median_x/2
 
+plt.plot(pd.concat({p0:np.log(nutrient_adequacy_ratio(poorer_x,my_prices(p0,i=USE_GOOD)))[UseNutrients] for p0 in P},axis=1).T,P)
+plt.legend(UseNutrients)
+plt.ylabel('Price')
+plt.xlabel('log nutrient adequacy ratio')
+plt.axvline(0)
+plt.axhline(p.sel(i=USE_GOOD).values)
+#+end_src
 
 

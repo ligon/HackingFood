@@ -47,18 +47,16 @@ desirability or nutritional content of food.
    Update this post as the project proceeds.
 
 ** [#A] Choice of a dataset
-
-        Need to be able to:
-          - Observe item expenditures, to estimate demand system;
-          - Observe (or construct) quantities of different items, in
-            units that can be converted into standard units;
-          - Be able to map quantities of food into bundles of nutrients.
+        You are free (indeed, encouraged) to use one of the datasets
+        we used in Project 3 to estimate demand systems, and an FCT
+        that can be used to map estimated demands into nutrients.
 
 ** [#A] Estimate Demand System
-   Estimate a system of demands for different kinds of food, obtaining
-   estimates of parameters than can then be used to describe demands
-   as function of prices, budgets, and household characteristics.
-
+   Estimate (or use an already estimated) a system of demands for
+   different kinds of food, obtaining estimates of parameters than can
+   then be used to describe demands as function of prices, budgets,
+   and household characteristics.
+   
 ** [#A] Construct Nutrient System
    If you can describe quantities demanded as function of prices, budgets, and
    household characteristics, and map quantities into nutrients, then
@@ -113,10 +111,10 @@ desirability or nutritional content of food.
 ** [#A] Replication & Discussion
 
    Your project and git repository will be shared with some randomly
-   chosen other team, and your team will be randomly chosen to have
-   materials from some other team share with it. 
+   chosen other teams, and your team will be randomly chosen to have
+   materials from some other teams shared with it. 
  
-   Attempt to replicate the other team's main results, using the data
+   Attempt to replicate the other teams' main results, using the data
    and code shared with you.  Document your attempt, identifying any
    problems you encountered, your thoughts on overcoming these
    problems, and describing strengths and weaknesses of the other
