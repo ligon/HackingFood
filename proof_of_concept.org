@@ -19,14 +19,20 @@
   All the data required for estimation and calculation can be found
   in a google spreadsheet.  Choose one to explore!
 #+begin_src ipython
-COUNTRY = 'Uganda'
+COUNTRY = 'Nigeria'
 #+end_src
 
 #+begin_src ipython
 URL = {'Uganda':'https://docs.google.com/spreadsheets/d/1yVLriVpo7KGUXvR3hq_n53XpXlD5NmLaH1oOMZyV0gQ/',
        'Tanzania':'https://docs.google.com/spreadsheets/d/1Tknc2F8K6SaA7j0R7J_NE8yJBTsCPPw77_Bfc04MY40/',
-       'ICRISAT':'https://docs.google.com/spreadsheets/d/13Ig5hZif-NSHtgkKRp_cEgKXk0lOsdUB2BAD6O_FnRo'}
-DAYS_PER_PERIOD = {'Uganda':7,'Tanzania':7,'ICRISAT':365.25} # Number of days of expenditure recall
+       'ICRISAT':'https://docs.google.com/spreadsheets/d/13Ig5hZif-NSHtgkKRp_cEgKXk0lOsdUB2BAD6O_FnRo',
+       'Nigeria':{'Expenditures':'https://docs.google.com/spreadsheets/d/1qzz6XGhPWLZLmwjrUY4W9k9U2PYukWblQKXWu0l37C4/',
+                  'FCT':'https://docs.google.com/spreadsheets/d/1whE_EW5x-jxrsKvYWfefdBppzp_TZhPP61bdEN-FEJ4/',
+                  'RDI':'https://docs.google.com/spreadsheets/d/1whE_EW5x-jxrsKvYWfefdBppzp_TZhPP61bdEN-FEJ4/',
+                  'HH Characteristics':'https://docs.google.com/spreadsheets/d/1whE_EW5x-jxrsKvYWfefdBppzp_TZhPP61bdEN-FEJ4/',
+                  'Prices':'https://docs.google.com/spreadsheets/d/1whE_EW5x-jxrsKvYWfefdBppzp_TZhPP61bdEN-FEJ4/'}
+                  }
+DAYS_PER_PERIOD = {'Uganda':7,'Tanzania':7,'ICRISAT':365.25,'Nigeria':7} # Number of days of expenditure recall
 #+end_src
 
 
@@ -45,8 +51,15 @@ import cfe
 import numpy as np
 from eep153_tools import read_sheets
 
-x = read_sheets(URL[COUNTRY],json_creds=my_creds,sheet='Expenditures').set_index(['j','t','m'])
-x.columns.name = 'i'
+x = read_sheets(URL[COUNTRY],json_creds=my_creds,sheet='Expenditures')
+
+if len(x.columns==5): # stored as a series
+    x = x.set_index(['j','t','m','i']).squeeze()
+    x = x.unstack('i')
+else:    
+    x = x.set_index(['j','t','m'])
+    x.columns.name = 'i'
+    
 x = x.replace(0,np.nan)
 y = np.log(x)
 
@@ -80,7 +93,7 @@ r.to_dataset("my %s.ds" % COUNTRY)
 ### First year, first market, and some good.  Change if you wish! ###
 my_t = r.coords['t'].data.flatten()[0]
 my_m = r.coords['m'].data.flatten()[0]
-my_i = r.coords['i'].data.flatten()[0]
+my_i = r.get_beta(as_df=True).sort_values(ascending=False).index[0]
 #####################################################################
 
 p = r.prices.sel(t=my_t,m=my_m,drop=True)
@@ -160,8 +173,7 @@ plt.ylabel('log nutrient')
  #+end_src
 
 
-** Nutritional requirements                                         
-
+** Nutritional requirements
  Individuals have nutritional requirements established by nutrition
  scientists.  Here we grab one such set of requirements:
  #+begin_src ipython
