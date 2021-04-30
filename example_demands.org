@@ -1,4 +1,3 @@
-
 * Introduction
 In our last project we used data to estimate systems of food demand
 using different datasets.  An output from that project was as set of
@@ -81,7 +80,7 @@ x = r.get_predicted_expenditures().sum('i')
 median_x = x.where(x>0).sel(t=t,m=m).median('j') # Budget (median household)
 
 # Note selection of prices for 1975 for market A
-p = r.prices.sel(t=t,m=m,u='Kilograms').fillna(1).copy()
+p = r.prices.sel(t=t,m=m).fillna(1).copy()
 
 p.to_dataframe().fillna(1).squeeze()
 #+end_src
@@ -101,10 +100,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 %matplotlib inline
 
-USE_GOOD = 'Coconut'
+USE_GOOD = 'Bengalgram Dahl'
     
 # Values for prices
-ref_price = r.prices.sel(i=USE_GOOD,t=t,m=m,u='Kilograms')
+ref_price = r.prices.sel(i=USE_GOOD,t=t,m=m)
 P = np.linspace(ref_price/5,ref_price*5,50)
 
 def my_prices(p0,p=p,i=USE_GOOD):
