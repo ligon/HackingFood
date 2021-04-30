@@ -1,231 +1,237 @@
-* Preface
+* Costs
+  :PROPERTIES:
+  :EXPORT_FILE_NAME: ../Materials/Project4/example_costs.ipynb
+  :END:
+** Preface
 
-First, install =CFEDemand= package if necessary:
-#+begin_src ipython 
-!pip install CFEDemands --upgrade
+   There are a few modules you may need to install:
+ #+begin_src ipython
+#!pip install CFEDemands --upgrade
+#!pip install xarray
+#!pip install dvc[gdrive]
+#!pip install h5netcdf
+ #+end_src
 
-#+end_src
 
-Then load relevant dataset:
-#+begin_src ipython :results silent :tangle costs_preface.py 
+   All the data required for estimation and calculation can be found
+   in a google spreadsheet.  Choose one to explore!
+ #+begin_src ipython
+COUNTRY = 'Uganda'
+ #+end_src
+
+ #+begin_src ipython
+URL = {'Uganda':'https://docs.google.com/spreadsheets/d/1yVLriVpo7KGUXvR3hq_n53XpXlD5NmLaH1oOMZyV0gQ/',
+       'Tanzania':'https://docs.google.com/spreadsheets/d/1Tknc2F8K6SaA7j0R7J_NE8yJBTsCPPw77_Bfc04MY40/',
+       'ICRISAT':'https://docs.google.com/spreadsheets/d/13Ig5hZif-NSHtgkKRp_cEgKXk0lOsdUB2BAD6O_FnRo'}
+DAYS_PER_PERIOD = {'Uganda':7,'Tanzania':7,'ICRISAT':365.25} # Number of days of expenditure recall
+ #+end_src
+
+ To read the various sheets, we'll need some credentials.  Import a
+ function to read google sheets, and point to an
+ unencrypted json file that has the appropriate permissions:
+ #+begin_src ipython
+from eep153_tools import read_sheets
+
+my_creds = '../students.json'
+ #+end_src
+
+** Estimation
+    First, we pull in data and estimate CFE demands /given/ the prices
+    and budgets of households in the data.
+
+ #+begin_src ipython 
 import cfe
 import numpy as np
-import pandas as pd
-import matplotlib.pyplot as plt
+from eep153_tools import read_sheets
 
-## Choose dataset ##
-USE = "ICRISAT"
-#USE = "Tanzania"
+x = read_sheets(URL[COUNTRY],json_creds=my_creds,sheet='Expenditures').set_index(['j','t','m'])
+x.columns.name = 'i'
+x = x.replace(0,np.nan)
+y = np.log(x)
 
-# Results can be made persistent by saving them, and then re-loading...
-if USE=="ICRISAT":
-    DIR = "./IndianICRISAT/"
-    r = cfe.from_dataset(DIR+'indian_icrisat.ds')
-    USE_GOOD = 'Milk' #'Bengalgram dhal'
-elif USE=="Tanzania":
-    DIR = "./TanzanianNPS/"
-    r = cfe.from_dataset(DIR+'tanzanian_nps.ds')
-    USE_GOOD = 'Ripe Bananas'
-else:
-    raise ValueError("No such value of USE")
+z = read_sheets(URL[COUNTRY],json_creds=my_creds,sheet='HH Characteristics').set_index(['j','t','m'])
+z.columns.name = 'k'
 
-fct = pd.read_pickle(DIR+'fct.df')
-rda = pd.read_pickle(DIR+"rda.df")
+p = read_sheets(URL[COUNTRY],json_creds=my_creds,sheet='Prices').set_index(['t','m'])
+p.columns.name = 'i'
 
-# Use prices, distribution of budgets from first round, first market:
-t = r.firstround  # First round
-m = r.coords['m'][0] # First market
+r = cfe.Result(y=y,z=z,prices=p)
 
-# Distribution of predicted total expenditures
-xhat = r.get_predicted_expenditures().sum('i')
-xhat = xhat.where(xhat>0,np.nan)
+r.get_alpha()
+xhat = r.get_predicted_expenditures()
+ #+end_src
 
-# Note selection of prices for first period and first market
-p = r.prices.sel(t=t,m=m).fillna(1).copy()
+ Estimation is kind of expensive, so you might want to save these
+ results to use in your later code.
+ #+begin_src ipython
+r.to_dataset("my %s.ds" % COUNTRY)
+ #+end_src
 
-def my_prices(p0,p=p,i=USE_GOOD):
+ By the same token, if you've *already* saved the estimated result, you
+ can skip estimation and just  load it...
+ #+begin_src ipython
+import cfe
+r = cfe.from_dataset("my %s.ds" % COUNTRY)
+ #+end_src
+
+** Ceteris Paribus
+
+    We begin by setting up some benchmarks for prices and budgets, so
+    the things we don't want to change we can hold fixed.
+  #+begin_src ipython
+### First year, first market, and some good.  Change if you wish! ###
+my_t = r.coords['t'].data.flatten()[0]
+my_m = r.coords['m'].data.flatten()[0]
+my_i = r.coords['i'].data.flatten()[0]
+#####################################################################
+
+p = r.prices.sel(t=my_t,m=my_m,drop=True)
+phat = p.to_dataframe('i').dropna().squeeze()
+
+ref_price = r.prices.sel(i=my_i,t=my_t,m=my_m)
+P = np.linspace(ref_price/10,ref_price*5,50)
+
+def my_prices(p0,p=phat,i=my_i):
+    """
+    Set price of good i to p0, holding remaining prices fixed at values in p.
+    """
     p = p.copy()
     p.loc[i] = p0
-    return p
+    return p.squeeze()
+  #+end_src
 
-# Now fix up FCT
+** Nutrient Demands
+   The nutrient value of food consumed by the household is just the
+   product of its diet and a food conversion table.  So let's write a
+   function that describes that product:
+ #+begin_src ipython
+# Get FCT:
+fct = read_sheets(URL[COUNTRY],
+                  json_creds='../students.json',
+                  sheet='FCT').set_index('i')
+fct.columns.name='n'
 
-# Change some labels in fct
-d={'protein':'Protein',
-   'protein g':'Protein',
-   'fat':'Fat',
-   'energy_kcal':'Calories',
-   'energy kcal':'Calories',
-   'calcium':'Calcium',
-   'ca mg':'Calcium',
-   'betacarotene':'Betacarotene',
-   'thiamine':'Thiamine',
-   'riboflavin':'Riboflavin',
-   'niacin':'Niacin',
-   'iron':'Iron',
-   'fe mg':'Iron',
-   'ascorbic_total':'Ascorbic Acid',
-   'vit a ug':'Vitamin A',
-   'vit b6 mg':'Vitamin B6',
-   'vit b12 ug':'Vitamin B12',
-   'vit d ug':'Vitamin D',
-   'vit e ug':'Vitamin E',
-   'vit c mg':'Vitamin C',
-   'mg mg':'Magnesium',
-   'zn mg':'Zinc'}
-
-fct = fct.rename(columns=d) #[list(d.values())]
-
-# Fix capitalization (to match food labels)
-fct.index = fct.reset_index()['Item name'].str.title()
-
-# Replace missing with zeros
-fct = fct.fillna(0)
-
-try:
-    fct.index = fct.index.droplevel('unit')
-except AttributeError: pass # No units?
-
-def nutrient_demand(x,p,z=None):
-    c = r.demands(x,p,z=z)
+def nutrient_demand(x,p):
+    c = r.demands(x,p)
     fct0,c0 = fct.align(c,axis=0,join='inner')
     N = fct0.T@c0
 
+    N = N.loc[~N.index.duplicated()]
+    
     return N
+ #+end_src
 
-# In first round, averaged over households and villages
-zbar = r.z.sel(t=r.firstround).mean(['j','m'])[:-1] # Leave out log HSize
+** Nutritional requirements
+ Individuals have nutritional requirements established by nutrition
+ scientists.  Here we grab one such set of requirements:
+ #+begin_src ipython
+rdi = read_sheets(URL[COUNTRY],
+                  json_creds='../students.json',
+                  sheet='RDI').set_index('n').replace(np.nan,0)
+rdi.columns.name = 'k'
+
+rdi = rdi.replace('',0)
+rdi
+ #+end_src
+
+*** Nutritional Needs of Households
+    Our data on demand and nutrients is at the /household/ level; we
+    can't directly compare household level nutrition with individual
+    level requirements.  What we *can* do is add up minimum individual
+    requirements, and see whether household total exceed these.  This
+    isn't a guarantee that all individuals have adequate nutrition
+    (since the way food is allocated in the household might be quite
+    unequal, or unrelated to individual requirements), but it is
+    /necessary/ if all individuals are to have adequate nutrition.
+
+    For the average household, the number of different kinds of people
+    can be computed by averaging over households:
+ #+begin_src ipython :results silent
+# Find average household characteristics for reference period & place
+zbar = r.z.sel(t=my_t,m=my_m,drop=True).mean('j').to_dataframe()
+ #+end_src
+
+ Now, the inner/dot/matrix product between =zbar= and the =rda=
+ DataFrame of requirements will give us minimum requirements for the
+ average household:
+ #+begin_src ipython
 
 # This matrix product gives minimum nutrient requirements for average
-# household in first round
-hh_rda = rda.replace('',0).T@zbar
+# household in reference year & place
+my_rdi,my_zbar = rdi.align(zbar.T,axis=1,join='inner')
+hh_rdi = my_rdi@my_zbar.T
 
+# But this is per *day*, while our data is per period:
+hh_rdi = hh_rdi*DAYS_PER_PERIOD[COUNTRY]
+hh_rdi
+ #+end_src
+
+*** Nutritional Adequacy of Food Demands                            
+ Since we can trace out demands for nutrients as a function of $(x,p)$,
+ and we've computed minimum nutritional requirements for the average
+ household, we can /normalize/ nutritional intake to check the adequacy
+ of diet.
+ #+begin_src ipython :results silent
 def nutrient_adequacy_ratio(x,p):
-    return nutrient_demand(x,p)/hh_rda
+    return (nutrient_demand(x,p)/hh_rdi.T).squeeze()
+ #+end_src
+
+Maybe select a few nutrients of particular interest...
+#+begin_src ipython
+UseNutrients = ['Calories','Protein','Iron','Calcium']
 
 #+end_src
 
-* Simple Policy Experiments
 
-Consider two policies:  First, changing income so that some proportion
-of the population achieves nutritional adequacy.  Here choose quantile
-we're interested in (e.g., a quantile of 0.5 is the median; a quantile
-of 0.25 is the household at the 25th percentage point of the distribution).
+** Simple Policy Experiments
 
-#+begin_src ipython
+ Consider two policies:  First, changing income so that some proportion
+ of the population achieves nutritional adequacy.  Here choose quantile
+ we're interested in (e.g., a quantile of 0.5 is the median; a quantile
+ of 0.25 is the household at the 25th percentage point of the distribution).
+
+ #+begin_src ipython
 
 # A quantile of 0.5 is the median.  Play with quantile value, or just assign.
-x0 = xhat.sel(t=t,m=m).quantile(0.01,'j') # Budget (median household)
-x0 = 50
-#+end_src
+xbar = r.get_predicted_expenditures().sel(t=my_t,m=my_m).sum('i')
 
+# Drop households with /no/ predicted expenditures
+xbar = xbar.where(xbar>0)
 
-#+begin_src ipython
-import matplotlib.pyplot as plt
-import numpy as np
+x0 = xbar.quantile(0.5,'j') # Budget (median household)
+#x0 = 50
 
+# Range of budgets to explore
 X = np.linspace(x0/10,x0*5,50)
-
-UseNutrients = ['Protein','Calories','Iron','Calcium']
-plt.plot(X,pd.concat({x:np.log(nutrient_adequacy_ratio(x,p))[UseNutrients] for x in X},axis=1).T)
-plt.legend(UseNutrients)
-plt.xlabel('Budget')
-plt.ylabel('log nutrient adequacy ratio')
-plt.axhline(0)
-plt.axvline(x0)
 #+end_src
 
-#+results:
-:results:
-# Out[3]:
 
+** Compensated Policy Experiments
 
-# text/plain
-: <Figure size 432x288 with 1 Axes>
+ #+begin_src ipython
+import matplotlib.pyplot as plt
 
-# image/png
-[[file:obipy-resources/756e60360b3cf57cec6422c0f6bcc791-7464xB.png]]
-:end:
-
-
-As before, we can also vary relative prices.  Here we trace out
-nutritional adequacy varying the price of a single good:
-#+begin_src ipython
-poorer_x = x0
-
-# Choose reference (t,m) for reference good
-ref_price = r.prices.sel(i=USE_GOOD,t=t,m=m)
+#my_i = 'Milk'
+my_i = 'Gur (Jaggery)'
+ref_price = r.prices.sel(i=my_i,t=my_t,m=my_m)
 P = np.linspace(ref_price/10,ref_price*5,50)
-
-plt.plot(pd.concat({p0:np.log(nutrient_adequacy_ratio(poorer_x,my_prices(p0,i=USE_GOOD)))[UseNutrients] for p0 in P},axis=1).T,P)
-plt.legend(UseNutrients)
-plt.ylabel('Price')
-plt.xlabel('log nutrient adequacy ratio')
-plt.axvline(0)
-plt.axhline(p.sel(i=USE_GOOD).values)
-#+end_src
-
-#+results:
-:results:
-# Out[4]:
-
-
-# text/plain
-: <Figure size 432x288 with 1 Axes>
-
-# image/png
-[[file:obipy-resources/756e60360b3cf57cec6422c0f6bcc791-746F8H.png]]
-:end:
-
-
-#+begin_src ipython
-plt.plot([r.demands(poorer_x,my_prices(p0,i=USE_GOOD))[USE_GOOD] for p0 in P],P)
-plt.ylabel('Price')
-plt.xlabel(USE_GOOD)
-plt.axhline(p.sel(i=USE_GOOD).values)
-#+end_src
-
-#+results:
-:results:
-# Out[5]:
-
-
-# text/plain
-: <Figure size 432x288 with 1 Axes>
-
-# image/png
-[[file:obipy-resources/756e60360b3cf57cec6422c0f6bcc791-746SGO.png]]
-:end:
-
-* Compensated Policy Experiments
-
-#+begin_src ipython
-#USE_GOOD = 'Rice'
-USE_GOOD = 'Milk'
 
 U0 = r.indirect_utility(x0,p)
 
-plt.plot([r.demands(poorer_x,my_prices(p0,i=USE_GOOD))[USE_GOOD] for p0 in P],P)
-plt.plot([r.demands(U0,my_prices(p0,i=USE_GOOD),type="Hicksian")[USE_GOOD] for p0 in P],P)
+### If you're getting lots of not useful warnings you want to ignore
+# import warnings
+# warnings.filterwarnings('ignore',category=UserWarning)
+####################################################################
+
+plt.plot([r.demands(x0,my_prices(p0,i=my_i))[my_i] for p0 in P],P)
+plt.plot([r.demands(U0,my_prices(p0,i=my_i),type="Hicksian")[my_i] for p0 in P],P)
 plt.ylabel('Price')
-plt.xlabel(USE_GOOD)
-#plt.axhline(p.sel(i=USE_GOOD).values)
+plt.xlabel(my_i)
+#plt.axhline(p.sel(i=my_i).values)
 plt.legend(("Marshallian","Hicksian"))
-#+end_src
+ #+end_src
 
-#+results:
-:results:
-# Out[29]:
-
-
-# text/plain
-: <Figure size 432x288 with 1 Axes>
-
-# image/png
-[[file:obipy-resources/756e60360b3cf57cec6422c0f6bcc791-746Hwt.png]]
-:end:
-
-#+begin_src ipython :results silent
+ #+begin_src ipython :results silent
 def compensating_variation(U0,p0,p1):
     x0 = r.expenditure(U0,p0)
     x1 = r.expenditure(U0,p1)
@@ -240,7 +246,11 @@ def revenue(U0,p0,p1,type='Marshallian'):
     
     dp = p1 - p0 # Change in prices
 
-    return dp.T@r.demands(U0,p1,type=type)
+    c = r.demands(U0,p1,type=type)
+
+    dp,c = dp.align(c,join='inner')
+
+    return dp.T@c
 
 
 def deadweight_loss(U0,p0,p1):
@@ -251,7 +261,7 @@ def deadweight_loss(U0,p0,p1):
     """
     cv = compensating_variation(U0,p0,p1)
 
-    return revenue(U0,p0,p1,type='Hicksian') - cv
+    return cv - revenue(U0,p0,p1,type='Hicksian') 
     
     
 def compensated_nutrient_demand(U,p,z=None):
@@ -262,32 +272,51 @@ def compensated_nutrient_demand(U,p,z=None):
     return N
 
 def compensated_nutrient_adequacy_ratio(U,p):
-    return compensated_nutrient_demand(U,p)/hh_rda
+    return (compensated_nutrient_demand(U,p)/hh_rdi.T).squeeze()
 
-#+end_src
+ #+end_src
 
-#+begin_src ipython
+Examine effects of price changes on /compensated/ nutrient adequacy
+(i.e., a price increase is accompanied by additional income to keep
+utility constant).
+
+ #+begin_src ipython
+my_i = 'Jowar/Sorghum'
+
 fig,ax2 = plt.subplots()
 ax2.set_ylabel('log NAR')
-ax2.plot(P,[np.log(compensated_nutrient_adequacy_ratio(U0,my_prices(p0))[UseNutrients]) for p0 in P])
+ax2.plot(P,[np.log(compensated_nutrient_adequacy_ratio(U0,my_prices(p0,i=my_i))[UseNutrients]) for p0 in P])
 ax2.legend(UseNutrients)
 ax2.axhline(0)
-ax2.set_xlabel("Price of %s" % USE_GOOD)
-#+end_src
+ax2.set_xlabel("Price of %s" % my_i)
+ #+end_src
 
-#+begin_src ipython
+Examine effects of price changes on revenue (if price change due to a
+tax or subsidy) and compensating variation.
+
+ #+begin_src ipython
 fig, ax1 = plt.subplots()
 
-ax1.plot(P,[compensating_variation(U0,p,my_prices(p0)) for p0 in P])
-ax1.set_xlabel("Price of %s" % USE_GOOD)
+ax1.plot(P,[compensating_variation(U0,phat,my_prices(p0,i=my_i)) for p0 in P])
+ax1.set_xlabel("Price of %s" % my_i)
 ax1.set_ylabel("Compensating Variation")
 
-ax1.plot(P,[revenue(U0,p,my_prices(p0)) for p0 in P],'k')
+ax1.plot(P,[revenue(U0,phat,my_prices(p0,i=my_i),type='Hicksian') for p0 in P],'k')
 ax1.legend(('Compensating Variation','Revenue'))
 ax1.axhline(0)
-ax1.axvline(p.loc[USE_GOOD])
+ax1.axvline(phat.loc[my_i])
 
-#+end_src
+ #+end_src
+
+
+Differences between revenue and compensating variation is deadweight-loss:
+ #+begin_src ipython
+fig, ax1 = plt.subplots()
+
+ax1.plot(P,[deadweight_loss(U0,phat,my_prices(p0,i=my_i)) for p0 in P])
+ax1.set_xlabel("Price of %s" % my_i)
+ax1.set_ylabel("Deadweight Loss")
+ #+end_src
 
 
 
