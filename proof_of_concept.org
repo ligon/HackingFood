@@ -43,8 +43,8 @@ my_creds = '../students.json'
 #+end_src
 
 ** Estimation
-   First, we pull in data and estimate CFE demands /given/ the prices
-   and budgets of households in the data.
+   First, we pull in data on expenditures, household characteristics,
+   and price:
 
 #+begin_src ipython 
 import cfe
@@ -68,9 +68,35 @@ z.columns.name = 'k'
 
 p = read_sheets(URL[COUNTRY],json_creds=my_creds,sheet='Prices').set_index(['t','m'])
 p.columns.name = 'i'
+#+end_src
 
-r = cfe.Result(y=y,z=z,prices=p)
+Let's take a look at the  different periods that appear in the
+data. If you can't estimate (the next step) because your kernel dies
+it may be that you should use a subset of the periods.
+#+begin_src ipython
+use_periods = "t in %s" % str(p.index.levels[0].tolist())
 
+# If you want to use just a subset of periods, redefine
+# use_periods here:
+#
+#use_periods ="t in ['2015Q3','2016Q1','2018Q3','2019Q1']"
+
+use_periods
+#+end_src
+
+Next, we construct an object we can use in the estimation.
+
+#+begin_src ipython
+
+
+r = cfe.Result(y=y.query(use_periods),
+               z=z.query(use_periods),
+               prices=p.query(use_periods))
+#+end_src
+
+
+Next, we estimate CFE demands /given/ the prices and budgets of households in the data.
+#+begin_src ipython
 r.get_alpha()
 xhat = r.get_predicted_expenditures()
 #+end_src

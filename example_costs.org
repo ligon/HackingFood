@@ -211,8 +211,8 @@ X = np.linspace(x0/10,x0*5,50)
  #+begin_src ipython
 import matplotlib.pyplot as plt
 
-#my_i = 'Milk'
-my_i = 'Gur (Jaggery)'
+my_i = 'Milk'
+#my_i = 'Gur (Jaggery)'
 ref_price = r.prices.sel(i=my_i,t=my_t,m=my_m)
 P = np.linspace(ref_price/10,ref_price*5,50)
 
