@@ -56,7 +56,7 @@ r.delta.to_dataframe().unstack('k').dropna()
 #+end_src
 
 
-The triple of paramters $(\alpha,\beta,\delta)$ completely describes
+The triple of parameters $(\alpha,\beta,\delta)$ completely describes
 the demand system and the corresponding utility function (over the
 goods we observe).
 
@@ -94,7 +94,7 @@ c
 #+end_src
 
 Now we can trace out demands for a household with median budget but
-varying prices of coconuts (holding other prices fixed):
+varying prices of (say) coconuts (holding other prices fixed):
 #+begin_src ipython
 import numpy as np
 import matplotlib.pyplot as plt
