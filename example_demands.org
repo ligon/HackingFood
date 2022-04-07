@@ -12,9 +12,6 @@ If you don't already have the latest version of the =cfe= package
 installed, grab it, along with some dependencies:
 #+begin_src ipython
 !pip install CFEDemands --upgrade
-!pip install xarray
-!pip install dvc[gdrive]
-!pip install h5netcdf
 #+end_src
 
 #+begin_src ipython :results silent
@@ -52,7 +49,7 @@ r.get_beta(as_df=True).dropna()
 And parameters related to household characteristics $\delta$:
 
 #+begin_src ipython
-r.delta.to_dataframe().unstack('k').dropna()
+r.get_delta(as_df=True).dropna()
 #+end_src
 
 
