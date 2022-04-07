@@ -11,9 +11,6 @@
   There are a few modules you may need to install:
 #+begin_src ipython
 #!pip install CFEDemands --upgrade
-#!pip install xarray
-#!pip install dvc[gdrive]
-#!pip install h5netcdf
 #+end_src
 
   All the data required for estimation and calculation can be found
@@ -35,13 +32,6 @@ URL = {'Uganda':'https://docs.google.com/spreadsheets/d/1yVLriVpo7KGUXvR3hq_n53X
 DAYS_PER_PERIOD = {'Uganda':7,'Tanzania':7,'ICRISAT':365.25,'Nigeria':7} # Number of days of expenditure recall
 #+end_src
 
-
-To read the various sheets, we'll need some credentials.  Point to an
-unencrypted json file that has the appropriate permissions:
-#+begin_src ipython
-my_creds = '../students.json'
-#+end_src
-
 ** Estimation
    First, we pull in data on expenditures, household characteristics,
    and price:
@@ -49,7 +39,7 @@ my_creds = '../students.json'
 #+begin_src ipython 
 import cfe
 import numpy as np
-from eep153_tools import read_sheets
+from eep153_tools.sheets import read_sheets
 
 x = read_sheets(URL[COUNTRY],json_creds=my_creds,sheet='Expenditures')
 
@@ -87,8 +77,6 @@ use_periods
 Next, we construct an object we can use in the estimation.
 
 #+begin_src ipython
-
-
 r = cfe.Result(y=y.query(use_periods),
                z=z.query(use_periods),
                prices=p.query(use_periods))
@@ -162,7 +150,6 @@ plt.ylabel('Price of %s' % my_i)
  #+begin_src ipython
 # Get FCT:
 fct = read_sheets(URL[COUNTRY],
-                  json_creds='../students.json',
                   sheet='FCT').set_index('i')
 fct.columns.name='n'
 
@@ -182,11 +169,6 @@ def nutrient_demand(x,p):
 import numpy as np
 import pandas as pd
 
-### If you're getting lots of not useful warnings you want to ignore
-# import warnings
-# warnings.filterwarnings('ignore',category=UserWarning)
-####################################################################
-
 X = np.linspace(median_x/5,median_x*5,50)
 
 # UseNutrients = ['Protein','Calories','Iron','Calcium']
@@ -204,7 +186,6 @@ plt.ylabel('log nutrient')
  scientists.  Here we grab one such set of requirements:
  #+begin_src ipython
 rdi = read_sheets(URL[COUNTRY],
-                  json_creds='../students.json',
                   sheet='RDI').set_index('n').replace(np.nan,0)
 rdi.columns.name = 'k'
 
