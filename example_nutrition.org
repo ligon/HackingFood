@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 #+EXPORT_FILE_NAME: ../Materials/Project4/example_nutrition.ipynb
 * Preface
 First, if you don't already have the latest version of the =cfe= package
@@ -9,40 +8,17 @@ installed, grab it, along with some dependencies:
 !pip install h5netcdf
 #+end_src
 
-Second, load relevant dataset:
-=======
+
 * Nutrient Demands
   :PROPERTIES:
   :EXPORT_FILE_NAME: ../Materials/Project4/example_nutrition_demands.ipynb
   :END:
 ** Introduction
- In our last project we used data to estimate systems of food demand
- using different datasets.  An output from that project was as set of
- =cfe.Result= objects; these bundle together both data and the results
- from the demand system estimation, and can be used for prediction as
- well.  
-
- Here we'll explore some of the uses of the =cfe.Result= class, using
- an instance created using data from the Indian ICRISAT data.
-
- If you don't already have the latest version of the =cfe= package
- installed, grab it, along with some dependencies:
- #+begin_src ipython
-!pip install CFEDemands --upgrade
-#!pip install xarray
-#!pip install dvc
-#!pip install h5netcdf
- #+end_src
-
- #+begin_src ipython :results silent
-import pandas as pd
-import cfe
- #+end_src
 
  We'll get data from two places.  First, basic data, including a food
  conversion table and recommended daily intakes table can be found in
  a google spreadsheet.  
->>>>>>> update
+
 #+begin_src ipython
 DataURL = 'https://docs.google.com/spreadsheets/d/13Ig5hZif-NSHtgkKRp_cEgKXk0lOsdUB2BAD6O_FnRo'
 key = DataURL.split('/')[-1]
