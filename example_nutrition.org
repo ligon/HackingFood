@@ -1,31 +1,37 @@
-#+EXPORT_FILE_NAME: ../Materials/Project4/example_nutrition.ipynb
-* Preface
-First, if you don't already have the latest version of the =cfe= package
-installed, grab it, along with some dependencies:
-#+begin_src ipython
-!pip install CFEDemands --upgrade --pre
-!pip install xarray --upgrade
-!pip install h5netcdf
-#+end_src
-
-
 * Nutrient Demands
   :PROPERTIES:
   :EXPORT_FILE_NAME: ../Materials/Project4/example_nutrition_demands.ipynb
   :END:
 ** Introduction
+ In our last project we used data to estimate systems of food demand
+ using different datasets.  An output from that project was as set of
+ =cfe.Result= objects; these bundle together both data and the results
+ from the demand system estimation, and can be used for prediction as
+ well.  
 
+ Here we'll explore some of the uses of the =cfe.Result= class, using
+ an instance created using data from the Indian ICRISAT data.
+
+ If you don't already have the latest version of the =cfe= package
+ installed, grab it, along with some dependencies:
+ #+begin_src ipython
+!pip install -r requirements.txt
+ #+end_src
+
+ #+begin_src ipython :results silent
+import pandas as pd
+import cfe
+ #+end_src
+
+** Data
  We'll get data from two places.  First, basic data, including a food
  conversion table and recommended daily intakes table can be found in
  a google spreadsheet.  
 
+
 #+begin_src ipython
 DataURL = 'https://docs.google.com/spreadsheets/d/13Ig5hZif-NSHtgkKRp_cEgKXk0lOsdUB2BAD6O_FnRo'
 key = DataURL.split('/')[-1]
-#+end_src
-You'll also need to be sure that your credentials are decrypted:
-#+begin_src ipython
-!gpg --batch --passphrase "SECRET PASSPHRASE" -d ../students.json.gpg > ../students.json
 #+end_src
  An instance =r= of =cfe.Result= can be made persistent with
  =r.to_dataset('my_result.ds')=, which saves the instance "on disk" in
@@ -34,8 +40,6 @@ You'll also need to be sure that your credentials are decrypted:
  Indian ICRISAT villages:
 #+begin_src ipython
 r = cfe.from_dataset('./Indian ICRISAT_small.ds')
-
-r
  #+end_src
 
  Pick prices that were prevailing at some time and place; e.g.,
@@ -81,14 +85,11 @@ def my_prices(p0,p=p,i='Coconut'):
  conversion table developed by Gopalan et al (1980) to the foods
  reported in the Indian ICRISAT data:
  #+begin_src ipython
-import eep153_tools
+from eep153_tools.sheets import read_sheets
 
-fct = eep153_tools.read_sheets(key,
-                               json_creds='../students.json',
-                               sheet='FCT').set_index('i')
+fct = read_sheets(key,sheet='FCT').set_index('i')
 
  #+end_src
-
 
  We need the index of the Food Conversion Table (FCT) to match up with
  the index of the vector of quantities demanded.   To manage this we
@@ -132,11 +133,6 @@ def nutrient_demand(x,p):
  #+begin_src ipython
 import numpy as np
 import matplotlib.pyplot as plt
-
-### If you're getting lots of not useful warnings you want to ignore
-# import warnings
-# warnings.filterwarnings('ignore',category=UserWarning)
-####################################################################
 
 X = np.linspace(median_x/5,median_x*5,50)
 

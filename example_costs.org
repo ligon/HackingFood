@@ -7,9 +7,6 @@
    There are a few modules you may need to install:
  #+begin_src ipython
 #!pip install CFEDemands --upgrade
-#!pip install xarray
-#!pip install dvc[gdrive]
-#!pip install h5netcdf
  #+end_src
 
 
@@ -42,17 +39,17 @@ my_creds = '../students.json'
  #+begin_src ipython 
 import cfe
 import numpy as np
-from eep153_tools import read_sheets
+from eep153_tools.sheets import read_sheets
 
-x = read_sheets(URL[COUNTRY],json_creds=my_creds,sheet='Expenditures').set_index(['j','t','m'])
+x = read_sheets(URL[COUNTRY],sheet='Expenditures').set_index(['j','t','m'])
 x.columns.name = 'i'
 x = x.replace(0,np.nan)
 y = np.log(x)
 
-z = read_sheets(URL[COUNTRY],json_creds=my_creds,sheet='HH Characteristics').set_index(['j','t','m'])
+z = read_sheets(URL[COUNTRY],sheet='HH Characteristics').set_index(['j','t','m'])
 z.columns.name = 'k'
 
-p = read_sheets(URL[COUNTRY],json_creds=my_creds,sheet='Prices').set_index(['t','m'])
+p = read_sheets(URL[COUNTRY],sheet='Prices').set_index(['t','m'])
 p.columns.name = 'i'
 
 r = cfe.Result(y=y,z=z,prices=p)
@@ -126,7 +123,6 @@ def nutrient_demand(x,p):
  scientists.  Here we grab one such set of requirements:
  #+begin_src ipython
 rdi = read_sheets(URL[COUNTRY],
-                  json_creds='../students.json',
                   sheet='RDI').set_index('n').replace(np.nan,0)
 rdi.columns.name = 'k'
 
@@ -217,11 +213,6 @@ ref_price = r.prices.sel(i=my_i,t=my_t,m=my_m)
 P = np.linspace(ref_price/10,ref_price*5,50)
 
 U0 = r.indirect_utility(x0,p)
-
-### If you're getting lots of not useful warnings you want to ignore
-# import warnings
-# warnings.filterwarnings('ignore',category=UserWarning)
-####################################################################
 
 plt.plot([r.demands(x0,my_prices(p0,i=my_i))[my_i] for p0 in P],P)
 plt.plot([r.demands(U0,my_prices(p0,i=my_i),type="Hicksian")[my_i] for p0 in P],P)
