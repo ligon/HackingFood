@@ -11,7 +11,7 @@ an instance created using data from the Indian ICRISAT data.
 If you don't already have the latest version of the =cfe= package
 installed, grab it, along with some dependencies:
 #+begin_src ipython
-!pip install CFEDemands --upgrade
+!pip install -r requirements.txt
 #+end_src
 
 #+begin_src ipython :results silent
@@ -26,7 +26,7 @@ An instance =r= of =cfe.Result= can be made persistent with
 this method below to load data and demand system estimated from the
 Indian ICRISAT data:
 #+begin_src ipython
-r = cfe.from_dataset('./Indian ICRISAT_small.ds')
+r = cfe.from_dataset('./Indian ICRISAT_small.ds',engine='netcdf4')
 
 r
 #+end_src
@@ -97,7 +97,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 %matplotlib inline
 
-USE_GOOD = 'Bengalgram Dahl'
+USE_GOOD = 'Wheat'
     
 # Values for prices
 ref_price = r.prices.sel(i=USE_GOOD,t=t,m=m)
@@ -124,7 +124,7 @@ import matplotlib.pyplot as plt
 USE_GOOD = 'Coconut'
     
 # Values for prices
-ref_price = r.prices.sel(i=USE_GOOD,t=t,m=m,u='Kilograms')
+ref_price = r.prices.sel(i=USE_GOOD,t=t,m=m)
 
 # Range of budgets to consider
 X = np.linspace(median_x/10,median_x*10,50)
