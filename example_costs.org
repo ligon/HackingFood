@@ -6,20 +6,17 @@
 
    There are a few modules you may need to install:
  #+begin_src ipython
-#!pip install CFEDemands --upgrade
+#!pip install -r requirements.txt
  #+end_src
 
+Exploit fact that we've already estimated demand systems for a bunch
+of different countries.  Choose one:
 
-   All the data required for estimation and calculation can be found
-   in a google spreadsheet.  Choose one to explore!
  #+begin_src ipython
 COUNTRY = 'Uganda'
  #+end_src
 
  #+begin_src ipython
-URL = {'Uganda':'https://docs.google.com/spreadsheets/d/1yVLriVpo7KGUXvR3hq_n53XpXlD5NmLaH1oOMZyV0gQ/',
-       'Tanzania':'https://docs.google.com/spreadsheets/d/1Tknc2F8K6SaA7j0R7J_NE8yJBTsCPPw77_Bfc04MY40/',
-       'ICRISAT':'https://docs.google.com/spreadsheets/d/13Ig5hZif-NSHtgkKRp_cEgKXk0lOsdUB2BAD6O_FnRo'}
 DAYS_PER_PERIOD = {'Uganda':7,'Tanzania':7,'ICRISAT':365.25} # Number of days of expenditure recall
  #+end_src
 
@@ -32,37 +29,6 @@ from eep153_tools import read_sheets
 my_creds = '../students.json'
  #+end_src
 
-** Estimation
-    First, we pull in data and estimate CFE demands /given/ the prices
-    and budgets of households in the data.
-
- #+begin_src ipython 
-import cfe
-import numpy as np
-from eep153_tools.sheets import read_sheets
-
-x = read_sheets(URL[COUNTRY],sheet='Expenditures').set_index(['j','t','m'])
-x.columns.name = 'i'
-x = x.replace(0,np.nan)
-y = np.log(x)
-
-z = read_sheets(URL[COUNTRY],sheet='HH Characteristics').set_index(['j','t','m'])
-z.columns.name = 'k'
-
-p = read_sheets(URL[COUNTRY],sheet='Prices').set_index(['t','m'])
-p.columns.name = 'i'
-
-r = cfe.Result(y=y,z=z,prices=p)
-
-r.get_alpha()
-xhat = r.get_predicted_expenditures()
- #+end_src
-
- Estimation is kind of expensive, so you might want to save these
- results to use in your later code.
- #+begin_src ipython
-r.to_dataset("my %s.ds" % COUNTRY)
- #+end_src
 
  By the same token, if you've *already* saved the estimated result, you
  can skip estimation and just  load it...
