@@ -50,6 +50,10 @@ And parameters related to household characteristics $\delta$:
 
 #+begin_src ipython
 r.get_delta(as_df=True).dropna()
+
+# Or
+from cfe.df_utils import to_dataframe
+to_dataframe(r.delta)
 #+end_src
 
 
@@ -121,7 +125,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 %matplotlib inline
 
-USE_GOOD = 'Coconut'
+USE_GOOD = 'Wheat'
     
 # Values for prices
 ref_price = r.prices.sel(i=USE_GOOD,t=t,m=m)

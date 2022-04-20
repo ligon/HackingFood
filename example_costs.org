@@ -6,7 +6,7 @@
 
    There are a few modules you may need to install:
  #+begin_src ipython
-#!pip install CFEDemands --upgrade
+#!pip install -r requirements.txt
  #+end_src
 
 
@@ -19,22 +19,20 @@ COUNTRY = 'Uganda'
  #+begin_src ipython
 URL = {'Uganda':'https://docs.google.com/spreadsheets/d/1yVLriVpo7KGUXvR3hq_n53XpXlD5NmLaH1oOMZyV0gQ/',
        'Tanzania':'https://docs.google.com/spreadsheets/d/1Tknc2F8K6SaA7j0R7J_NE8yJBTsCPPw77_Bfc04MY40/',
-       'ICRISAT':'https://docs.google.com/spreadsheets/d/13Ig5hZif-NSHtgkKRp_cEgKXk0lOsdUB2BAD6O_FnRo'}
-DAYS_PER_PERIOD = {'Uganda':7,'Tanzania':7,'ICRISAT':365.25} # Number of days of expenditure recall
- #+end_src
-
- To read the various sheets, we'll need some credentials.  Import a
- function to read google sheets, and point to an
- unencrypted json file that has the appropriate permissions:
- #+begin_src ipython
-from eep153_tools import read_sheets
-
-my_creds = '../students.json'
+       'ICRISAT':'https://docs.google.com/spreadsheets/d/13Ig5hZif-NSHtgkKRp_cEgKXk0lOsdUB2BAD6O_FnRo',
+       'Nigeria':{'Expenditures':'https://docs.google.com/spreadsheets/d/1qzz6XGhPWLZLmwjrUY4W9k9U2PYukWblQKXWu0l37C4/',
+                  'FCT':'https://docs.google.com/spreadsheets/d/1whE_EW5x-jxrsKvYWfefdBppzp_TZhPP61bdEN-FEJ4/',
+                  'RDI':'https://docs.google.com/spreadsheets/d/1whE_EW5x-jxrsKvYWfefdBppzp_TZhPP61bdEN-FEJ4/',
+                  'HH Characteristics':'https://docs.google.com/spreadsheets/d/1whE_EW5x-jxrsKvYWfefdBppzp_TZhPP61bdEN-FEJ4/',
+                  'Prices':'https://docs.google.com/spreadsheets/d/1whE_EW5x-jxrsKvYWfefdBppzp_TZhPP61bdEN-FEJ4/'}
+                  }
+DAYS_PER_PERIOD = {'Uganda':7,'Tanzania':7,'ICRISAT':365.25,'Nigeria':7} # Number of days of expenditure recall
  #+end_src
 
 ** Estimation
     First, we pull in data and estimate CFE demands /given/ the prices
-    and budgets of households in the data.
+    and budgets of households in the data.  (If you've already done
+    the estimation and saved it, skip this step...)
 
  #+begin_src ipython 
 import cfe
@@ -76,10 +74,10 @@ r = cfe.from_dataset("my %s.ds" % COUNTRY)
     We begin by setting up some benchmarks for prices and budgets, so
     the things we don't want to change we can hold fixed.
   #+begin_src ipython
-### First year, first market, and some good.  Change if you wish! ###
-my_t = r.coords['t'].data.flatten()[0]
-my_m = r.coords['m'].data.flatten()[0]
-my_i = r.coords['i'].data.flatten()[0]
+### First period, first market, and some good.  Change if you wish! ###
+my_t = r.coords['t'].data.flatten()[0] # Period 
+my_m = r.coords['m'].data.flatten()[0] # Market
+my_i = r.coords['i'].data.flatten()[0] # Good
 #####################################################################
 
 p = r.prices.sel(t=my_t,m=my_m,drop=True)
@@ -95,6 +93,8 @@ def my_prices(p0,p=phat,i=my_i):
     p = p.copy()
     p.loc[i] = p0
     return p.squeeze()
+
+phat
   #+end_src
 
 ** Nutrient Demands
@@ -103,9 +103,7 @@ def my_prices(p0,p=phat,i=my_i):
    function that describes that product:
  #+begin_src ipython
 # Get FCT:
-fct = read_sheets(URL[COUNTRY],
-                  json_creds='../students.json',
-                  sheet='FCT').set_index('i')
+fct = read_sheets(URL[COUNTRY],sheet='FCT').set_index('i')
 fct.columns.name='n'
 
 def nutrient_demand(x,p):
@@ -116,6 +114,8 @@ def nutrient_demand(x,p):
     N = N.loc[~N.index.duplicated()]
     
     return N
+
+fct
  #+end_src
 
 ** Nutritional requirements
@@ -188,12 +188,13 @@ UseNutrients = ['Calories','Protein','Iron','Calcium']
 
  #+begin_src ipython
 
-# A quantile of 0.5 is the median.  Play with quantile value, or just assign.
+# Predicted budgets (sum of all expenditures for each household)
 xbar = r.get_predicted_expenditures().sel(t=my_t,m=my_m).sum('i')
 
 # Drop households with /no/ predicted expenditures
 xbar = xbar.where(xbar>0)
 
+# A quantile of 0.5 is the median.  Play with quantile value, or just assign.
 x0 = xbar.quantile(0.5,'j') # Budget (median household)
 #x0 = 50
 
@@ -208,11 +209,12 @@ X = np.linspace(x0/10,x0*5,50)
 import matplotlib.pyplot as plt
 
 my_i = 'Milk'
-#my_i = 'Gur (Jaggery)'
+
 ref_price = r.prices.sel(i=my_i,t=my_t,m=my_m)
 P = np.linspace(ref_price/10,ref_price*5,50)
 
-U0 = r.indirect_utility(x0,p)
+# Utility of median household, given prices
+U0 = r.indirect_utility(x0,p)  
 
 plt.plot([r.demands(x0,my_prices(p0,i=my_i))[my_i] for p0 in P],P)
 plt.plot([r.demands(U0,my_prices(p0,i=my_i),type="Hicksian")[my_i] for p0 in P],P)
@@ -272,7 +274,7 @@ Examine effects of price changes on /compensated/ nutrient adequacy
 utility constant).
 
  #+begin_src ipython
-my_i = 'Jowar/Sorghum'
+my_i = 'Matoke'
 
 fig,ax2 = plt.subplots()
 ax2.set_ylabel('log NAR')
