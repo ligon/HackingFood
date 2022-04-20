@@ -9,49 +9,48 @@
 #!pip install -r requirements.txt
  #+end_src
 
+   Some countries we have data for:
+#+begin_src ipython
+URL = {'Uganda':'https://docs.google.com/spreadsheets/d/1yVLriVpo7KGUXvR3hq_n53XpXlD5NmLaH1oOMZyV0gQ/',
+       'Tanzania':'https://docs.google.com/spreadsheets/d/1Tknc2F8K6SaA7j0R7J_NE8yJBTsCPPw77_Bfc04MY40/',
+       'Indian ICRISAT':'https://docs.google.com/spreadsheets/d/13Ig5hZif-NSHtgkKRp_cEgKXk0lOsdUB2BAD6O_FnRo'}
+
+DAYS_PER_PERIOD = {'Uganda':7,'Tanzania':7,'Indian ICRISAT':365.25} # Number of days of expenditure recall
+#+end_src
+
 Exploit fact that we've already estimated demand systems for a bunch
 of different countries.  Choose one:
 
  #+begin_src ipython
-COUNTRY = 'Uganda'
- #+end_src
-
- #+begin_src ipython
-DAYS_PER_PERIOD = {'Uganda':7,'Tanzania':7,'ICRISAT':365.25} # Number of days of expenditure recall
- #+end_src
-
- To read the various sheets, we'll need some credentials.  Import a
- function to read google sheets, and point to an
- unencrypted json file that has the appropriate permissions:
- #+begin_src ipython
-from eep153_tools import read_sheets
-
-my_creds = '../students.json'
- #+end_src
-
-
- By the same token, if you've *already* saved the estimated result, you
- can skip estimation and just  load it...
- #+begin_src ipython
 import cfe
-r = cfe.from_dataset("my %s.ds" % COUNTRY)
+
+COUNTRY = 'Uganda'
+
+# May need to unzip?
+#!gunzip Uganda_small.ds.gz
+
+r = cfe.from_dataset("%s_small.ds" % COUNTRY,engine='netcdf4')
+
  #+end_src
+
 
 ** Ceteris Paribus
 
     We begin by setting up some benchmarks for prices and budgets, so
     the things we don't want to change we can hold fixed.
   #+begin_src ipython
+import numpy as np
+
 ### First year, first market, and some good.  Change if you wish! ###
-my_t = r.coords['t'].data.flatten()[0]
-my_m = r.coords['m'].data.flatten()[0]
-my_i = r.coords['i'].data.flatten()[0]
+my_t = r.coords['t'].data.flatten()[0] # Period
+my_m = r.coords['m'].data.flatten()[0] # Market
+my_i = 'bread' # r.coords['i'].data.flatten()[0] # Good
 #####################################################################
 
-p = r.prices.sel(t=my_t,m=my_m,drop=True)
+p = r.prices.sel(u='Kilogram (kg)',t=my_t,m=my_m,drop=True)
 phat = p.to_dataframe('i').dropna().squeeze()
 
-ref_price = r.prices.sel(i=my_i,t=my_t,m=my_m)
+ref_price = r.prices.sel(u='Kilogram (kg)',i=my_i,t=my_t,m=my_m)
 P = np.linspace(ref_price/10,ref_price*5,50)
 
 def my_prices(p0,p=phat,i=my_i):
@@ -61,91 +60,11 @@ def my_prices(p0,p=phat,i=my_i):
     p = p.copy()
     p.loc[i] = p0
     return p.squeeze()
+
+phat
   #+end_src
 
-** Nutrient Demands
-   The nutrient value of food consumed by the household is just the
-   product of its diet and a food conversion table.  So let's write a
-   function that describes that product:
- #+begin_src ipython
-# Get FCT:
-fct = read_sheets(URL[COUNTRY],
-                  json_creds='../students.json',
-                  sheet='FCT').set_index('i')
-fct.columns.name='n'
-
-def nutrient_demand(x,p):
-    c = r.demands(x,p)
-    fct0,c0 = fct.align(c,axis=0,join='inner')
-    N = fct0.T@c0
-
-    N = N.loc[~N.index.duplicated()]
-    
-    return N
- #+end_src
-
-** Nutritional requirements
- Individuals have nutritional requirements established by nutrition
- scientists.  Here we grab one such set of requirements:
- #+begin_src ipython
-rdi = read_sheets(URL[COUNTRY],
-                  sheet='RDI').set_index('n').replace(np.nan,0)
-rdi.columns.name = 'k'
-
-rdi = rdi.replace('',0)
-rdi
- #+end_src
-
-*** Nutritional Needs of Households
-    Our data on demand and nutrients is at the /household/ level; we
-    can't directly compare household level nutrition with individual
-    level requirements.  What we *can* do is add up minimum individual
-    requirements, and see whether household total exceed these.  This
-    isn't a guarantee that all individuals have adequate nutrition
-    (since the way food is allocated in the household might be quite
-    unequal, or unrelated to individual requirements), but it is
-    /necessary/ if all individuals are to have adequate nutrition.
-
-    For the average household, the number of different kinds of people
-    can be computed by averaging over households:
- #+begin_src ipython :results silent
-# Find average household characteristics for reference period & place
-zbar = r.z.sel(t=my_t,m=my_m,drop=True).mean('j').to_dataframe()
- #+end_src
-
- Now, the inner/dot/matrix product between =zbar= and the =rda=
- DataFrame of requirements will give us minimum requirements for the
- average household:
- #+begin_src ipython
-
-# This matrix product gives minimum nutrient requirements for average
-# household in reference year & place
-my_rdi,my_zbar = rdi.align(zbar.T,axis=1,join='inner')
-hh_rdi = my_rdi@my_zbar.T
-
-# But this is per *day*, while our data is per period:
-hh_rdi = hh_rdi*DAYS_PER_PERIOD[COUNTRY]
-hh_rdi
- #+end_src
-
-*** Nutritional Adequacy of Food Demands                            
- Since we can trace out demands for nutrients as a function of $(x,p)$,
- and we've computed minimum nutritional requirements for the average
- household, we can /normalize/ nutritional intake to check the adequacy
- of diet.
- #+begin_src ipython :results silent
-def nutrient_adequacy_ratio(x,p):
-    return (nutrient_demand(x,p)/hh_rdi.T).squeeze()
- #+end_src
-
-Maybe select a few nutrients of particular interest...
-#+begin_src ipython
-UseNutrients = ['Calories','Protein','Iron','Calcium']
-
-#+end_src
-
-
-** Simple Policy Experiments
+** Simple Policy Experiments: Changing Budget
 
  Consider two policies:  First, changing income so that some proportion
  of the population achieves nutritional adequacy.  Here choose quantile
@@ -168,15 +87,34 @@ X = np.linspace(x0/10,x0*5,50)
 #+end_src
 
 
-** Compensated Policy Experiments
+** Simple Policy Experiments: Changing Prices
+
+If price of a good increases/decreases, what's the cost to the
+household?  Ask a related question: If a price $p_1$ increases, how
+much /income/ do we need to give to the household to make it just as
+well off as it was at the old prices?
+
+Summarize this as the  /compensating variation/ associated with the
+price change.
+
+[[./compensating_variation.png]]
+
+Compensating Variation can also be measured as the (change in the)
+area under the *Hicksian* (or *compensated*) demand curve:
+
+[[./compensating_variation_newexpenditure.png]].
+
+
+*** Marshallian vs. Hicksian Demand Curves
+
+Let's look at Marshallian & Hicksian demands---one way of thinking
+about the Hicksian (compensated) curves is that they  eliminate the
+income effect associated with changing prices.
 
  #+begin_src ipython
 import matplotlib.pyplot as plt
 
-my_i = 'Milk'
-#my_i = 'Gur (Jaggery)'
-ref_price = r.prices.sel(i=my_i,t=my_t,m=my_m)
-P = np.linspace(ref_price/10,ref_price*5,50)
+#my_i = 'bread'  # Interesting Ugandan staple
 
 U0 = r.indirect_utility(x0,p)
 
@@ -188,6 +126,8 @@ plt.xlabel(my_i)
 plt.legend(("Marshallian","Hicksian"))
  #+end_src
 
+
+*** Welfare measures
  #+begin_src ipython :results silent
 def compensating_variation(U0,p0,p1):
     x0 = r.expenditure(U0,p0)
@@ -233,21 +173,7 @@ def compensated_nutrient_adequacy_ratio(U,p):
 
  #+end_src
 
-Examine effects of price changes on /compensated/ nutrient adequacy
-(i.e., a price increase is accompanied by additional income to keep
-utility constant).
-
- #+begin_src ipython
-my_i = 'Jowar/Sorghum'
-
-fig,ax2 = plt.subplots()
-ax2.set_ylabel('log NAR')
-ax2.plot(P,[np.log(compensated_nutrient_adequacy_ratio(U0,my_prices(p0,i=my_i))[UseNutrients]) for p0 in P])
-ax2.legend(UseNutrients)
-ax2.axhline(0)
-ax2.set_xlabel("Price of %s" % my_i)
- #+end_src
-
+*** Price Changes, Revenue, and Compensating Variation
 Examine effects of price changes on revenue (if price change due to a
 tax or subsidy) and compensating variation.
 
@@ -265,6 +191,7 @@ ax1.axvline(phat.loc[my_i])
 
  #+end_src
 
+*** Deadweight Loss
 
 Differences between revenue and compensating variation is deadweight-loss:
  #+begin_src ipython
