@@ -1,6 +1,6 @@
 * Nutrient Demands
   :PROPERTIES:
-  :EXPORT_FILE_NAME: ../Materials/Project4/example_nutrition_demands.ipynb
+  :EXPORT_FILE_NAME: ../Materials/Project4/example_nutrition.ipynb
   :END:
 ** Introduction
  In our last project we used data to estimate systems of food demand
@@ -15,7 +15,7 @@
  If you don't already have the latest version of the =cfe= package
  installed, grab it, along with some dependencies:
  #+begin_src ipython
-!pip install CFEDemands --upgrade
+!pip install -r requirements.txt
  #+end_src
 
  #+begin_src ipython :results silent
@@ -23,11 +23,13 @@ import pandas as pd
 import cfe
  #+end_src
 
+** Data
  We'll get data from two places.  First, basic data, including a food
  conversion table and recommended daily intakes table can be found in
  a google spreadsheet.  
 
- #+begin_src ipython
+
+#+begin_src ipython
 DataURL = 'https://docs.google.com/spreadsheets/d/13Ig5hZif-NSHtgkKRp_cEgKXk0lOsdUB2BAD6O_FnRo'
 key = DataURL.split('/')[-1]
 #+end_src
@@ -136,10 +138,11 @@ X = np.linspace(median_x/5,median_x*5,50)
 
 UseNutrients = ['Protein','Calories','Iron','Calcium']
 
-plt.plot(X,pd.concat({myx:np.log(nutrient_demand(myx,p))[UseNutrients] for myx in X},axis=1).T)
-plt.legend(UseNutrients)
-plt.xlabel('log budget')
-plt.ylabel('log nutrient')
+df = pd.concat({myx:np.log(nutrient_demand(myx,p))[UseNutrients] for myx in X},axis=1).T
+ax = df.plot()
+
+ax.set_xlabel('log budget')
+ax.set_ylabel('log nutrient')
  #+end_src
 
 
@@ -152,10 +155,12 @@ ref_price = r.prices.sel(i=USE_GOOD,t=t,m=m,drop=True)
 
 P = np.linspace(1,5,20).tolist()
 
-plt.plot(P,pd.DataFrame({p0:np.log(nutrient_demand(median_x,my_prices(p0,i=USE_GOOD)))[UseNutrients] for p0 in P}).T)
-plt.legend(UseNutrients)
-plt.xlabel('log price')
-plt.ylabel('log nutrient')
+ndf = pd.DataFrame({p0:np.log(nutrient_demand(median_x,my_prices(p0,i=USE_GOOD)))[UseNutrients] for p0 in P}).T
+
+ax = ndf.plot()
+
+ax.set_xlabel('log price')
+ax.set_ylabel('log nutrient')
  #+end_src
 
 * Nutritional requirements                                         

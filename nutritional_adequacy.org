@@ -1,11 +1,23 @@
-
+#+EXPORT_FILE_NAME: ../Materials/Project4/nutritional_adequacy.ipynb
 * Preface
 #+begin_src ipython
 import cfe
+import pandas as pd
+import numpy as np
 import matplotlib.pyplot as plt
 
-r = cfe.result.from_dataset('Indian ICRISAT.ds')
+r = cfe.result.from_dataset('Indian ICRISAT_small.ds',engine='netcdf4')
 UseNutrients=['Protein','Calories','Iron']
+
+# Reference period, market
+t,m = 75,1
+
+# Reference budget (find mean in reference period & market):
+reference_x = r.get_predicted_expenditures().mean('j').sum('i').sel(t=t,m=m)
+
+p = r.prices.sel(t=t,m=m,drop=True)
+p = p.to_dataframe('i').squeeze().dropna()
+p
 #+end_src
 * Nutritional requirements                                       
 
@@ -13,7 +25,7 @@ Individuals have nutritional requirements established by nutrition
 scientists.  Here are some standards established by the Indian
 National Institute of Nutrition:
 
-** Nutritional needs of individuals
+** Nutritional Needs of individuals
 
 *** Recommended Daily Allowances: India
  #+name: rda
@@ -46,6 +58,8 @@ National Institute of Nutrition:
 | Women   |     2290 |   45.8344 |    500000 |        1.4 |         2.4 |        45 |         5 |      5000 |    1150 |     20 |       220 |   4.9 |
 
 #+begin_src ipython :var RDA=rda :colnames no :exports none :results silent
+import pandas as pd
+
 rda=pd.DataFrame([x[1:] for x in RDA[1:]],columns=RDA[0][1:],index=[x[0] for x in RDA[1:]])
 rda.to_pickle(DIR+'rda.df')
 #+end_src
@@ -76,37 +90,101 @@ average household:
 #+begin_src ipython
 rda = pd.read_pickle('indian_rda.df').T
 
-# May need to tweak types to match RDA and zbar types:
-zbar['C 0-3'] = zbar['M 0-3'] + zbar['F 0-3']
-zbar['C 4-8'] = zbar['M 4-8'] + zbar['F 4-8']
-zbar['M'] = zbar['M 19-30'] + zbar['M 31-50'] + zbar['M 51+']
-zbar['F'] = zbar['F 19-30'] + zbar['F 31-50'] + zbar['F 51+']
-zbar = zbar[['C 0-3','C 4-8','M 9-13','F 9-13','M 14-18','F 14-18','M','F']]
-
-rda['C 0-3'] = rda['C 0-0.5'] + rda['C 0.5-1'] + rda['C 1-3']
-rda['C 4-8'] = rda['C 4-6'] + rda['C 7-9']
-rda['M 9-13'] = rda['B 10-12']
-rda['F 9-13'] = rda['G 10-12']
-rda['M 14-18'] = rda['B 13-15'] + rda['B 16-17']
-rda['F 14-18'] = rda['G 13-15'] + rda['G 16-17']
-rda['F'] = rda['W']
-
-rda = rda[['C 0-3','C 4-8','M 9-13','F 9-13','M 14-18','F 14-18','M','F']]
+# May need to tweak types or alignment to match RDA and zbar types:
+rda0,zbar0=rda.align(zbar,axis=1)
 
 # This matrix product gives minimum nutrient requirements for average
 # household in 1975
-hh_rda = rda.replace('',0).T@zbar
-hh_rda
+hh_rda = rda0.replace('',0)@zbar0
+
+# RDA is /daily/, but  demands in ICRISAT data are /annual/:
+hh_rda = hh_rda*365
 #+end_src
 
 * Nutritional Adequacy of Food Demands
+** Food Conversion Table
+As usual, we need data to convert foods to nutrients:
+ #+begin_src ipython
+
+from eep153_tools.sheets import read_sheets
+
+DataURL = 'https://docs.google.com/spreadsheets/d/13Ig5hZif-NSHtgkKRp_cEgKXk0lOsdUB2BAD6O_FnRo'
+key = DataURL.split('/')[-1]
+
+fct = read_sheets(key,sheet='FCT').set_index('i')
+ #+end_src
+
+
+** Prices
+ #+begin_src ipython :results silent
+def my_prices(p0,p=p,i='Coconut'):
+    p = p.copy()
+    p.loc[i] = p0
+    return p
+ #+end_src
+
+** Nutrient Demand
+ We can also use our demand functions to
+ compute nutrition as a /function/ of prices and budget.  
+
+#+begin_src ipython :results silent
+
+def nutrient_demand(x,p):
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        c = r.demands(x,p)
+
+    fct0,c0 = fct.align(c,axis=0,join='inner')
+    N = fct0.T@c0
+
+    N = N.loc[~N.index.duplicated()]
+    
+    return N
+ #+end_src
+
+ With this =nutrient_demand= function in hand, we can see how nutrient
+ outcomes vary with budget, given prices:
+ #+begin_src ipython
+import numpy as np
+import matplotlib.pyplot as plt
+
+X = np.linspace(reference_x/5,reference_x*5,50)
+
+UseNutrients = ['Protein','Calories','Iron','Calcium']
+
+df = pd.concat({myx:np.log(nutrient_demand(myx,p))[UseNutrients] for myx in X},axis=1).T
+ax = df.plot()
+
+ax.set_xlabel('log budget')
+ax.set_ylabel('log nutrient')
+ #+end_src
+
+
+ Now how does nutrition vary with prices?
+
+ #+begin_src ipython
+USE_GOOD = 'Jowar/Sorghum'
+
+ref_price = r.prices.sel(i=USE_GOOD,t=t,m=m,drop=True)
+
+P = np.linspace(1,5,20).tolist()
+
+ndf = pd.DataFrame({p0:np.log(nutrient_demand(reference_x,my_prices(p0,i=USE_GOOD)))[UseNutrients] for p0 in P}).T
+
+ax = ndf.plot()
+
+ax.set_xlabel('log price')
+ax.set_ylabel('log nutrient')
+ #+end_src
+
+** Nutritional Adequacy
 Since we can trace out demands for nutrients as a function of $(x,p)$,
 and we've computed minimum nutritional requirements for the average
 household, we can /normalize/ nutritional intake to check the adequacy
 of diet.
 #+begin_src ipython :results silent
-def nutrient_adequacy_ratio(x,pscale=None):
-    return nutrient_demand(x,pscale=pscale)/hh_rda
+def nutrient_adequacy_ratio(x,p):
+    return nutrient_demand(x,p)/hh_rda
 #+end_src
 
 In terms of normalized nutrients, any household with more than one
@@ -117,11 +195,16 @@ actual nutrients to required nutrients is termed the "nutrient
 adequacy ratio," or NAR.
 
 #+begin_src ipython
-plt.plot(X,pd.concat({x:np.log(nutrient_adequacy_ratio(x,p))[UseNutrients] for x in X},axis=1).T)
-plt.legend(UseNutrients)
-plt.xlabel('log budget')
-plt.ylabel('log nutrient adequacy ratio')
-plt.axhline(0)
+
+X = np.linspace(reference_x/5,reference_x*5,50)
+
+ndf = pd.concat({x:np.log(nutrient_adequacy_ratio(x,p))[UseNutrients] for x in X},axis=1).T
+
+ax = ndf.plot()
+
+ax.set_xlabel('log budget')
+ax.set_ylabel('log nutrient adequacy ratio')
+ax.axhline(0)
 #+end_src
 
 
@@ -129,14 +212,20 @@ plt.axhline(0)
 As before, we can also vary relative prices.  Here we trace out
 nutritional adequacy varying the price of a single good:
 #+begin_src ipython
-poorer_x = x/2
+poorer_x = reference_x/2
 
-plt.plot(pd.concat({p0:np.log(nutrient_adequacy_ratio(poorer_x,my_prices(p0,i=USE_GOOD)))[UseNutrients] for p0 in P},axis=1).T,P)
-plt.legend(UseNutrients)
-plt.ylabel('Price')
-plt.xlabel('log nutrient adequacy ratio')
-plt.axvline(0)
-plt.axhline(p.sel(i=USE_GOOD).values)
+Pscale = np.linspace(1,3,20).tolist()
+
+log_nar = {s0:np.log(nutrient_adequacy_ratio(poorer_x,my_prices(s0,p,i=USE_GOOD)))[UseNutrients] for s0 in Pscale}
+
+log_nar = pd.DataFrame(log_nar).T
+
+ax = log_nar.plot(ylabel='log NAR',xlabel='Price')
+
+
+ax.axhline(0)
+ax.axvline(p[USE_GOOD])
+
 #+end_src
 
 

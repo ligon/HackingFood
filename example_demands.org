@@ -31,7 +31,6 @@ r = cfe.from_dataset('./Indian ICRISAT_small.ds',engine='netcdf4')
 r
 #+end_src
 
-
 Our focus earlier was on estimation, but the result =r= already has
 encoded in it the results of that estimation.
 

@@ -10,7 +10,7 @@
 
   There are a few modules you may need to install:
 #+begin_src ipython
-#!pip install CFEDemands --upgrade
+!pip install -r requirements.txt
 #+end_src
 
   All the data required for estimation and calculation can be found
@@ -33,7 +33,27 @@ DAYS_PER_PERIOD = {'Uganda':7,'Tanzania':7,'ICRISAT':365.25,'Nigeria':7} # Numbe
 #+end_src
 
 ** Estimation
-   First, we pull in data on expenditures, household characteristics,
+   You may already have access to an estimated demand system.  If so,
+   use it!  Then you can skip down to "Plotting Food Demands".
+#+begin_src ipython
+import cfe
+
+# Might need to decompress a file (if it ends in ".gz")
+#!gunzip Niger_small.ds.gz
+
+DS = {'Niger':'Niger_small.ds',  
+      'Nigeria':'Nigeria_small.ds',  
+      'Ethiopia':'Ethiopia_small.ds',
+      'ICRISAT':'Indian ICRISAT_small.ds',
+      'Malawi':'Malawi_small.ds',
+      'Tanzania':'Tanzania_small.ds',
+      'Uganda':'Uganda_small.ds'}
+
+
+r = cfe.from_dataset(DS[COUNTRY],engine='netcdf4')
+#+end_src
+
+   Otherwise, we pull in data on expenditures, household characteristics,
    and price:
 
 #+begin_src ipython 
@@ -41,7 +61,7 @@ import cfe
 import numpy as np
 from eep153_tools.sheets import read_sheets
 
-x = read_sheets(URL[COUNTRY],json_creds=my_creds,sheet='Expenditures')
+x = read_sheets(URL[COUNTRY],sheet='Expenditures')
 
 if len(x.columns==5): # stored as a series
     x = x.set_index(['j','t','m','i']).squeeze()
@@ -53,10 +73,10 @@ else:
 x = x.replace(0,np.nan)
 y = np.log(x)
 
-z = read_sheets(URL[COUNTRY],json_creds=my_creds,sheet='HH Characteristics').set_index(['j','t','m'])
+z = read_sheets(URL[COUNTRY],sheet='HH Characteristics').set_index(['j','t','m'])
 z.columns.name = 'k'
 
-p = read_sheets(URL[COUNTRY],json_creds=my_creds,sheet='Prices').set_index(['t','m'])
+p = read_sheets(URL[COUNTRY],sheet='Prices').set_index(['t','m'])
 p.columns.name = 'i'
 #+end_src
 
@@ -153,8 +173,15 @@ fct = read_sheets(URL[COUNTRY],
                   sheet='FCT').set_index('i')
 fct.columns.name='n'
 
+
+ #+begin_src ipython
+import warnings 
+
 def nutrient_demand(x,p):
-    c = r.demands(x,p)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        c = r.demands(x,p)
+
     fct0,c0 = fct.align(c,axis=0,join='inner')
     N = fct0.T@c0
 
