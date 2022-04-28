@@ -256,7 +256,7 @@ hh_rdi = hh_rdi*DAYS_PER_PERIOD[COUNTRY]
 hh_rdi
  #+end_src
 
-*** Nutritional Adequacy of Food Demands                            
+*** Nutritional Adequacy of Food Demands
  Since we can trace out demands for nutrients as a function of $(x,p)$,
  and we've computed minimum nutritional requirements for the average
  household, we can /normalize/ nutritional intake to check the adequacy

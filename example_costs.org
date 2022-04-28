@@ -73,12 +73,13 @@ phat
 
  #+begin_src ipython
 
-# A quantile of 0.5 is the median.  Play with quantile value, or just assign.
+# Predicted budgets (sum of all expenditures for each household)
 xbar = r.get_predicted_expenditures().sel(t=my_t,m=my_m).sum('i')
 
 # Drop households with /no/ predicted expenditures
 xbar = xbar.where(xbar>0)
 
+# A quantile of 0.5 is the median.  Play with quantile value, or just assign.
 x0 = xbar.quantile(0.5,'j') # Budget (median household)
 #x0 = 50
 
@@ -116,7 +117,8 @@ import matplotlib.pyplot as plt
 
 #my_i = 'bread'  # Interesting Ugandan staple
 
-U0 = r.indirect_utility(x0,p)
+# Utility of median household, given prices
+U0 = r.indirect_utility(x0,p)  
 
 plt.plot([r.demands(x0,my_prices(p0,i=my_i))[my_i] for p0 in P],P)
 plt.plot([r.demands(U0,my_prices(p0,i=my_i),type="Hicksian")[my_i] for p0 in P],P)
@@ -174,6 +176,7 @@ def compensated_nutrient_adequacy_ratio(U,p):
  #+end_src
 
 *** Price Changes, Revenue, and Compensating Variation
+
 Examine effects of price changes on revenue (if price change due to a
 tax or subsidy) and compensating variation.
 
