@@ -37,6 +37,7 @@ DAYS_PER_PERIOD = {'Uganda':7,'Tanzania':7,'ICRISAT':365.25,'Nigeria':7} # Numbe
    use it!  Then you can skip down to "Plotting Food Demands".
 #+begin_src ipython
 import cfe
+import numpy as np
 
 # Might need to decompress a file (if it ends in ".gz")
 #!gunzip Niger_small.ds.gz
@@ -130,8 +131,9 @@ my_m = r.coords['m'].data.flatten()[0]
 my_i = r.get_beta(as_df=True).sort_values(ascending=False).index[0]
 #####################################################################
 
-p = r.prices.sel(t=my_t,m=my_m,drop=True)
-phat = p.to_dataframe('i').dropna()
+# Choice of unit will depend on data...
+p = r.prices.sel(u='Kilograms',t=my_t,m=my_m,drop=True)  
+phat = p.to_dataframe('i').dropna().squeeze()
 
 def my_prices(p0,p=phat,i=my_i):
     """
@@ -154,7 +156,7 @@ import matplotlib.pyplot as plt
 %matplotlib inline
 
 # Values for prices
-ref_price = r.prices.sel(i=my_i,t=my_t,m=my_m)
+ref_price = r.prices.sel(u='Kilograms',i=my_i,t=my_t,m=my_m)
 P = np.linspace(ref_price/5,ref_price*5,50)
 
 for x in [median_x*s for s in [.25,.5,1.,2,4]]:
@@ -168,6 +170,8 @@ plt.ylabel('Price of %s' % my_i)
    product of its diet and a food conversion table.  So let's write a
    function that describes that product:
  #+begin_src ipython
+from eep153_tools.sheets import read_sheets
+
 # Get FCT:
 fct = read_sheets(URL[COUNTRY],
                   sheet='FCT').set_index('i')
@@ -201,9 +205,9 @@ X = np.linspace(median_x/5,median_x*5,50)
 # UseNutrients = ['Protein','Calories','Iron','Calcium']
 UseNutrients = fct.columns.tolist()
 
-plt.plot(X,pd.concat({x:np.log(nutrient_demand(x,p))[UseNutrients] for x in X},axis=1).T)
+plt.plot(X,[np.log(nutrient_demand(x,p))[UseNutrients] for x in X])
 plt.legend(UseNutrients)
-plt.xlabel('log budget')
+plt.xlabel('Budget')
 plt.ylabel('log nutrient')
  #+end_src
 
@@ -270,9 +274,9 @@ def nutrient_adequacy_ratio(x,p):
  adequacy ratio," or NAR.
 
  #+begin_src ipython
-plt.plot(X,pd.concat({x:np.log(nutrient_adequacy_ratio(x,p))[UseNutrients] for x in X},axis=1).T)
+plt.plot(X,[np.log(nutrient_adequacy_ratio(x,p))[UseNutrients] for x in X])
 plt.legend(UseNutrients)
-plt.xlabel('log budget')
+plt.xlabel('Budget')
 plt.ylabel('log nutrient adequacy ratio')
 plt.axhline(0)
  #+end_src
@@ -282,11 +286,11 @@ plt.axhline(0)
  #+begin_src ipython
 poorer_x = median_x/2
 
-plt.plot(pd.concat({p0:np.log(nutrient_adequacy_ratio(poorer_x,my_prices(p0,i=my_i)))[UseNutrients] for p0 in P},axis=1).T,P)
+plt.plot([np.log(nutrient_adequacy_ratio(poorer_x,my_prices(p0,i=my_i)))[UseNutrients] for p0 in P],P)
 plt.legend(UseNutrients)
 plt.ylabel('Price')
 plt.xlabel('log nutrient adequacy ratio')
 plt.axvline(0)
-plt.axhline(p.sel(i=my_i).values)
+plt.axhline(phat[my_i])
  #+end_src
 
