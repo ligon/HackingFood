@@ -1,143 +1,164 @@
-* Introduction
-In our last project we used data to estimate systems of food demand
-using different datasets.  An output from that project was as set of
-=cfe.Result= objects; these bundle together both data and the results
-from the demand system estimation, and can be used for prediction as
-well.  
+* Example Demands
+  :PROPERTIES:
+  :EXPORT_FILE_NAME: ../Materials/Project4/example_demands.ipynb
+  :END:
+** Introduction
+ In our last project we used data to estimate systems of food demand
+ using different datasets.  An output from that project was as set of
+ =cfe.Regression= objects; these bundle together both data and the results
+ from the demand system estimation, and can be used for prediction as
+ well.
 
-Here we'll explore some of the uses of the =cfe.Result= class, using
-an instance created using data from the Indian ICRISAT data.
+ Here we'll explore some of the uses of the =cfe.Regression= class, using
+ an instance created previously (as in Project 3).
 
-If you don't already have the latest version of the =cfe= package
-installed, grab it, along with some dependencies:
-#+begin_src ipython
+After having estimated a demand system using data from our favorite country, we can imagine different counterfactual scenarios.  What if prices were different?  What if we give a cash transfer to a household?  What if school fees reduce the budget for food?  What are the consequences of any of these for diet & nutrition?
+
+ If you don't already have the latest version of the =CFEDemands= package
+ installed, grab it, along with some dependencies:
+ #+begin_src jupyter-python
 !pip install -r requirements.txt
+ #+end_src
+
+ #+begin_src jupyter-python :results silent
+import pandas as pd
+import cfe.regression as rgsn
+ #+end_src
+
+** Data
+ We'll get data from two places.  First, basic data, including a food
+ conversion table and recommended daily intakes table can be found in
+ a google spreadsheet.
+
+Here are addresses of google sheets for different dataframes for the
+case of Uganda:
+#+begin_src jupyter-python :tangle /tmp/foo.py
+InputFiles = {'Expenditures':('1yVLriVpo7KGUXvR3hq_n53XpXlD5NmLaH1oOMZyV0gQ','Expenditures (2019-20)'),
+              'Prices':('1yVLriVpo7KGUXvR3hq_n53XpXlD5NmLaH1oOMZyV0gQ','Prices'),
+              'HH Characteristics':('1yVLriVpo7KGUXvR3hq_n53XpXlD5NmLaH1oOMZyV0gQ','HH Characteristics'),
+              'FCT':('1yVLriVpo7KGUXvR3hq_n53XpXlD5NmLaH1oOMZyV0gQ','FCT'),
+              'RDI':('1yVLriVpo7KGUXvR3hq_n53XpXlD5NmLaH1oOMZyV0gQ','RDI'),}
 #+end_src
 
-#+begin_src ipython :results silent
-import cfe
-
-cfe.Result?
-#+end_src
-
-An instance =r= of =cfe.Result= can be made persistent with
-=r.to_dataset('my_result.ds')=, which saves the instance "on disk" in
-[[https://en.wikipedia.org/wiki/NetCDF][NetCDF format]], and can be loaded using =cfe.from_dataset=.  We use
-this method below to load data and demand system estimated from the
-Indian ICRISAT data:
-#+begin_src ipython
-r = cfe.from_dataset('./Indian ICRISAT_small.ds',engine='netcdf4')
-
-r
-#+end_src
-
-Our focus earlier was on estimation, but the result =r= already has
-encoded in it the results of that estimation.
-
-There are parameters $\alpha$:
-#+begin_src ipython
-r.get_alpha(as_df=True).dropna()
-#+end_src
-
-
-Elasticity parameters $\beta$ (we can't estimate all, so some are missing):
-#+begin_src ipython
-r.get_beta(as_df=True).dropna()
-#+end_src
-
-And parameters related to household characteristics $\delta$:
-
-#+begin_src ipython
-r.get_delta(as_df=True).dropna()
-
-# Or
-from cfe.df_utils import to_dataframe
-to_dataframe(r.delta)
-#+end_src
-
-
-The triple of parameters $(\alpha,\beta,\delta)$ completely describes
-the demand system and the corresponding utility function (over the
-goods we observe).
-
-* Demands
-
-As mentioned above, we've estimated the parameters of a Frischian
-demand system (demands that depend on prices and the households
-marginal utility of expenditures).  But we can /compute/ the
-corresponding Marshallian (depends on prices and budget) or Hicksian
-(depends on prices and the level of utility) demands for this same
-population, using the =cfe.Result.demands= method.  
-
-Let's compute Marshallian demands.  Start with a choice of budget $x$
-and prices.  We'll use the earliest prices, and focus on
-the first market we're interested in.
-#+begin_src ipython :results silent
-t = r.firstround  # First round
-m = r.coords['m'][0] # First market
-
-x = r.get_predicted_expenditures().sum('i')
-median_x = x.where(x>0).sel(t=t,m=m).median('j') # Budget (median household)
-
-# Note selection of prices for 1975 for market A
-p = r.prices.sel(t=t,m=m).fillna(1).copy()
-
-p.to_dataframe().fillna(1).squeeze()
-#+end_src
-
-Now compute expenditures on different items.  The object =r= already knows what the estimated
-parameters are, and uses those automatically:
-
-#+begin_src ipython
-c=r.demands(median_x,p)
-c
-#+end_src
-
-Now we can trace out demands for a household with median budget but
-varying prices of (say) coconuts (holding other prices fixed):
-#+begin_src ipython
+*** Prices, FCT, RDI
+#+begin_src jupyter-python :tangle /tmp/foo.py
+from eep153_tools.sheets import read_sheets
 import numpy as np
-import matplotlib.pyplot as plt
-%matplotlib inline
+import pandas as pd
 
-USE_GOOD = 'Wheat'
-    
-# Values for prices
-ref_price = r.prices.sel(i=USE_GOOD,t=t,m=m)
-P = np.linspace(ref_price/5,ref_price*5,50)
+def get_clean_sheet(key,sheet=None):
 
-def my_prices(p0,p=p,i=USE_GOOD):
+    df = read_sheets(key,sheet=sheet)
+    df.columns = [c.strip() for c in df.columns.tolist()]
+
+    df = df.loc[:,~df.columns.duplicated(keep='first')]
+
+    df = df.drop([col for col in df.columns if col.startswith('Unnamed')], axis=1)
+
+    df = df.loc[~df.index.duplicated(), :]
+
+    return df
+
+# Get prices
+p = get_clean_sheet(InputFiles['Prices'][0],
+                    sheet=InputFiles['Prices'][1])
+
+if 'm' not in p.columns:  # Supply "market" indicator if missing
+    p['m'] = 1
+
+p = p.set_index(['t','m'])
+p.columns.name = 'j'
+
+p = p.apply(lambda x: pd.to_numeric(x,errors='coerce'))
+p = p.replace(0,np.nan)
+
+fct = get_clean_sheet(InputFiles['FCT'][0],
+                    sheet=InputFiles['FCT'][1])
+
+fct = fct.set_index('j')
+fct.columns.name = 'n'
+
+fct = fct.apply(lambda x: pd.to_numeric(x,errors='coerce'))
+
+################## RDI, if available (consider using US) #####################
+rdi = get_clean_sheet(InputFiles['RDI'][0],
+                    sheet=InputFiles['RDI'][1])
+rdi = rdi.set_index('n')
+rdi.columns.name = 'k'
+#+end_src
+*** Pre-estimated Demand Systems
+ An instance =r= of =cfe.Regression= can be made persistent with
+ =r.to_pickle('my_result.pickle')=, which saves the instance "on disk", and can be loaded using =cfe.regression.read_pickle=.  We use  this method below to load data and demand system previously estimated for Uganda:
+#+begin_src jupyter-python
+r = rgsn.read_pickle('uganda_2019-20.pickle')  # Assumes you've already set this up e.g., in Project 3
+ #+end_src
+
+*** Reference Prices
+Choose reference prices.  Here we'll choose a particular year, and average prices across markets.  If you wanted to focus on particular market you'd do this differently.
+#+begin_src jupyter-python
+# Reference prices chosen from a particular time; average across place.
+# These are prices per kilogram:
+pbar = p.xs('2019-20',level='t').mean()
+pbar = pbar[r.beta.index] # Only use prices for goods we can estimate
+#+end_src
+
+*** Budgets
+
+Get food budget for all households, then find median budget:
+#+begin_src jupyter-python
+import numpy as np
+
+xhat = r.predicted_expenditures()
+
+# Total food expenditures per household
+xbar = xhat.groupby(['i','t','m']).sum()
+
+# Reference budget
+xref = xbar.quantile(0.5)  # Household at 0.5 quantile is median
+#+end_src
+
+*** Food Quantities
+Get quantities of food by dividing expenditures by prices:
+#+begin_src jupyter-python
+qhat = (xhat.unstack('j')/pbar).dropna(how='all')
+
+# Drop missing columns
+qhat = qhat.loc[:,qhat.count()>0]
+
+qhat
+#+end_src
+
+Finally, define a function to change a single price in the vector $p$:
+ #+begin_src jupyter-python :results silent
+def my_prices(p0,p=pbar,j='Millet'):
+    """
+    Change price of jth good to p0, holding other prices fixed.
+    """
     p = p.copy()
-    p.loc[i] = p0
+    p.loc[j] = p0
     return p
+ #+end_src
 
-for myx in [median_x*s for s in [.25,.5,1.,2,4]]:
-    plt.plot([r.demands(myx,my_prices(p0))[USE_GOOD] for p0 in P],P)
-
-plt.xlabel("%s in Kgs" % USE_GOOD)
-plt.ylabel('Price Scale')
-#+end_src
-
-And here are Engel curves (response to budget) holding prices fixed:
-#+begin_src ipython
-import numpy as np
+*** Demand functions
+#+begin_src jupyter-python
 import matplotlib.pyplot as plt
-%matplotlib inline
+%matplotlib notebook
 
-USE_GOOD = 'Wheat'
-    
-# Values for prices
-ref_price = r.prices.sel(i=USE_GOOD,t=t,m=m)
+use = 'Millet'  # Good we want demand curve for
 
-# Range of budgets to consider
-X = np.linspace(median_x/10,median_x*10,50)
+# Vary prices from 50% to 200% of reference.
+scale = np.linspace(.5,2,20)
 
-plt.plot(X,[r.demands(x,ref_price)[USE_GOOD] for x in X])
+# Demand for Millet for household at median budget
+plt.plot([r.demands(xref,my_prices(pbar[use]*s,pbar))[use] for s in scale],scale)
 
-plt.ylabel(USE_GOOD)
-plt.xlabel('Budget')
+# Demand for Millet for household at 25% percentile
+plt.plot([r.demands(xbar.quantile(0.25),my_prices(pbar[use]*s,pbar))[use] for s in scale],scale)
+
+# Demand for Millet for household at 75% percentile
+plt.plot([r.demands(xbar.quantile(0.75),my_prices(pbar[use]*s,pbar))[use] for s in scale],scale)
+
+plt.ylabel(f"Price (relative to base of {pbar[use]:.2f})")
+plt.xlabel(f"Quantities of {use} Demanded")
+
 #+end_src
-
-
-
-
