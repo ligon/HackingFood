@@ -1,0 +1,127 @@
+#    -*- mode: org -*-
+
+
+Archived entries from file /home/ligon/Teaching/EEP153/HackingFood/example_costs.org
+
+
+* Nutrient Demands                                                 :noexport:
+:PROPERTIES:
+:ARCHIVE_TIME: 2022-04-18 Mon 15:04
+:ARCHIVE_FILE: ~/Teaching/EEP153/HackingFood/example_costs.org
+:ARCHIVE_OLPATH: Costs
+:ARCHIVE_CATEGORY: example_costs
+:END:
+   The nutrient value of food consumed by the household is just the
+   product of its diet and a food conversion table.  So let's write a
+   function that describes that product:
+ #+begin_src ipython
+from eep153_tools.sheets import read_sheets
+
+# Get FCT:
+fct = read_sheets(URL[COUNTRY],sheet='FCT').set_index('i')
+fct.columns.name='n'
+
+def nutrient_demand(x,p):
+    c = r.demands(x,p)
+    fct0,c0 = fct.align(c,axis=0,join='inner')
+    N = fct0.T@c0
+
+    N = N.loc[~N.index.duplicated()]
+    
+    return N
+
+fct
+ #+end_src
+
+
+* Nutritional requirements                                         :noexport:
+:PROPERTIES:
+:ARCHIVE_TIME: 2022-04-18 Mon 15:04
+:ARCHIVE_FILE: ~/Teaching/EEP153/HackingFood/example_costs.org
+:ARCHIVE_OLPATH: Costs
+:ARCHIVE_CATEGORY: example_costs
+:END:
+ Individuals have nutritional requirements established by nutrition
+ scientists.  Here we grab one such set of requirements:
+ #+begin_src ipython
+rdi = read_sheets(URL[COUNTRY],
+                  sheet='RDI').set_index('n').replace(np.nan,0)
+rdi.columns.name = 'k'
+
+rdi = rdi.replace('',0)
+rdi
+ #+end_src
+
+** Nutritional Needs of Households                                 :noexport:
+    Our data on demand and nutrients is at the /household/ level; we
+    can't directly compare household level nutrition with individual
+    level requirements.  What we *can* do is add up minimum individual
+    requirements, and see whether household total exceed these.  This
+    isn't a guarantee that all individuals have adequate nutrition
+    (since the way food is allocated in the household might be quite
+    unequal, or unrelated to individual requirements), but it is
+    /necessary/ if all individuals are to have adequate nutrition.
+
+    For the average household, the number of different kinds of people
+    can be computed by averaging over households:
+ #+begin_src ipython :results silent
+# Find average household characteristics for reference period & place
+zbar = r.z.sel(t=my_t,m=my_m,drop=True).mean('j').to_dataframe()
+zbar
+ #+end_src
+
+ Now, the inner/dot/matrix product between =zbar= and the =rda=
+ DataFrame of requirements will give us minimum requirements for the
+ average household:
+ #+begin_src ipython
+
+# This matrix product gives minimum nutrient requirements for average
+# household in reference year & place
+my_rdi,my_zbar = rdi.align(zbar.T,axis=1,join='inner')
+hh_rdi = my_rdi@my_zbar.T
+
+# But this is per *day*, while our data is per period:
+hh_rdi = hh_rdi*DAYS_PER_PERIOD[COUNTRY]
+hh_rdi
+ #+end_src
+
+** Nutritional Adequacy of Food Demands                            :noexport:
+ Since we can trace out demands for nutrients as a function of $(x,p)$,
+ and we've computed minimum nutritional requirements for the average
+ household, we can /normalize/ nutritional intake to check the adequacy
+ of diet.
+ #+begin_src ipython :results silent
+def nutrient_adequacy_ratio(x,p):
+    return (nutrient_demand(x,p)/hh_rdi.T).squeeze()
+ #+end_src
+
+Maybe select a few nutrients of particular interest...
+#+begin_src ipython
+UseNutrients = ['Calories','Protein','Iron','Calcium']
+
+#+end_src
+
+
+
+* Compensated Nutrient Adequacy                                    :noexport:
+:PROPERTIES:
+:ARCHIVE_TIME: 2022-04-18 Mon 15:04
+:ARCHIVE_FILE: ~/Teaching/EEP153/HackingFood/example_costs.org
+:ARCHIVE_OLPATH: Costs/Simple Policy Experiments: Changing Prices
+:ARCHIVE_CATEGORY: example_costs
+:END:
+Examine effects of price changes on /compensated/ nutrient adequacy
+(i.e., a price increase is accompanied by additional income to keep
+utility constant).
+
+ #+begin_src ipython
+#my_i = 'Matoke'
+
+fig,ax2 = plt.subplots()
+ax2.set_ylabel('log NAR')
+ax2.plot(P,[np.log(compensated_nutrient_adequacy_ratio(U0,my_prices(p0,i=my_i))[UseNutrients]) for p0 in P])
+ax2.legend(UseNutrients)
+ax2.axhline(0)
+ax2.set_xlabel("Price of %s" % my_i)
+ #+end_src
+
