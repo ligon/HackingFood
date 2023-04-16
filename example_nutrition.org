@@ -7,7 +7,7 @@
  using different datasets.  An output from that project was as set of
  =cfe.Regression= objects; these bundle together both data and the results
  from the demand system estimation, and can be used for prediction as
- well.  
+ well.
 
  Here we'll explore some of the uses of the =cfe.Regression= class, using
  an instance created previously (as in Project 3).
@@ -17,7 +17,7 @@ After having estimated a demand system using data from our favorite country, we 
  If you don't already have the latest version of the =CFEDemands= package
  installed, grab it, along with some dependencies:
  #+begin_src jupyter-python
-!pip install -r requirements.txt
+#!pip install -r requirements.txt
  #+end_src
 
  #+begin_src jupyter-python :results silent
@@ -28,7 +28,7 @@ import cfe.regression as rgsn
 ** Data
  We'll get data from two places.  First, basic data, including a food
  conversion table and recommended daily intakes table can be found in
- a google spreadsheet.  
+ a google spreadsheet.
 
 Here are addresses of google sheets for different dataframes for the
 case of Uganda:
@@ -98,16 +98,8 @@ Choose reference prices.  Here we'll choose a particular year, and average price
 #+begin_src jupyter-python
 # Reference prices chosen from a particular time; average across place.
 # These are prices per kilogram:
-pbar = p.xs('2019-20',level='t').groupby('j').mean()
-
-# We also have /estimated/ reference prices, but the units for these are odd (Amount consumed on average).
-# Call these odd units a "quibble", so estimated prices are $/quibble.
-s = np.exp(r.get_Ar() + r.pi)
-sbar = s.xs('2019-20',level='t').groupby('j').mean()
-
-# Now we have reference prices of $/kg and $/quibble.
-# To get conversion from quibbles to kgs just multiply by rbar/pbar:
-kgs_per_quibble = rbar/pbar
+pbar = p.xs('2019-20',level='t').mean()
+pbar = pbar[r.beta.index] # Only use prices for goods we can estimate
 #+end_src
 
 *** Budgets
@@ -147,6 +139,7 @@ def my_prices(p0,p=pbar,j='Millet'):
     return p
  #+end_src
 
+** Demands
 *** Demand functions
 #+begin_src jupyter-python
 import matplotlib.pyplot as plt
@@ -157,47 +150,41 @@ use = 'Millet'  # Good we want demand curve for
 # Vary prices from 50% to 200% of reference.
 scale = np.linspace(.5,2,20)
 
-# We can get demands from r.demands, but units may not be what we want.
-# So get expenditures, and divide by prices/kg or similar.
-def demands_in_kgs(x,p):
-    """
-    Return demands; p is prices per kilogram
-    """
-    # Need to supply prices per quibble
-    x = r.expenditures(x,p*kgs_per_quibble)
-    qkg = x/p
-
-    return qkg
-
 # Demand for Millet for household at median budget
-plt.plot([demands_in_kgs(xref,my_prices(pbar[use]*s,pbar))[use] for s in scale],scale)
+plt.plot([r.demands(xref,my_prices(pbar[use]*s,pbar))[use] for s in scale],scale)
 
 # Demand for Millet for household at 25% percentile
-plt.plot([demands_in_kgs(xbar.quantile(0.25),my_prices(pbar[use]*s,pbar))[use] for s in scale],scale)
+plt.plot([r.demands(xbar.quantile(0.25),my_prices(pbar[use]*s,pbar))[use] for s in scale],scale)
 
 # Demand for Millet for household at 75% percentile
-plt.plot([demands_in_kgs(xbar.quantile(0.75),my_prices(pbar[use]*s,pbar))[use] for s in scale],scale)
+plt.plot([r.demands(xbar.quantile(0.75),my_prices(pbar[use]*s,pbar))[use] for s in scale],scale)
 
 plt.ylabel(f"Price (relative to base of {pbar[use]:.2f})")
 plt.xlabel(f"Quantities of {use} Demanded")
 
 #+end_src
+*** Engel Curves
 
-** Mapping to Nutrients :noexport:
+#+begin_src jupyter-python
+fig,ax = plt.subplots()
+
+scale = np.geomspace(.01,10,50)
+
+ax.plot(np.log(scale*xref),[r.expenditures(s*xref,pbar)/(s*xref) for s in scale])
+ax.set_xlabel(f'log budget (relative to base of {xref:.0f})')
+ax.set_ylabel(f'Expenditure share')
+ax.set_title('Engel Curves')
+#+end_src
+
+** Mapping to Nutrients
 
  We've seen how to map prices and budgets into vectors of consumption
- quantities using =cfe.Result.demands=.  Next we want to think about
+ quantities using =cfe.Regression.demands=.  Next we want to think about
  how to map these into bundles of /nutrients/.  The information needed
  for the mapping comes from a "Food Conversion Table" (or database,
- such as the [[https://ndb.nal.usda.gov/ndb/doc/apilist/API-FOOD-REPORTV2.md][USDA Nutrition DataBase]]).   Here we've adapted (with
- thanks to Alessandro Tarozzi of the Universitat Pompeu Fabra) a food
- conversion table developed by Gopalan et al (1980) to the foods
- reported in the Indian ICRISAT data:
+ such as the [[https://fdc.nal.usda.gov/][USDA Food Data Central]]).    We've already grabbed an FCT, let's take a look:
  #+begin_src jupyter-python
-from eep153_tools.sheets import read_sheets
-
-fct = read_sheets(key,sheet='FCT').set_index('i')
-
+fct
  #+end_src
 
  We need the index of the Food Conversion Table (FCT) to match up with
@@ -206,7 +193,7 @@ fct = read_sheets(key,sheet='FCT').set_index('i')
  #+begin_src jupyter-python
 
 # Create a new FCT and vector of consumption that only share rows in common:
-fct0,c0 = fct.align(qhat,axis=0,join='inner')
+fct0,c0 = fct.align(qhat.T,axis=0,join='inner')
 print(fct0.index)
  #+end_src
 
@@ -218,8 +205,7 @@ print(fct0.index)
 # The @ operator means matrix multiply
 N = fct0.T@c0
 
-# NB: ICRISAT data is *Annual* consumption
-N
+N  #NB: Uganda quantities are for previous 7 days
  #+end_src
 
  Of course, since we can compute the nutritional content of a vector of
@@ -243,11 +229,11 @@ def nutrient_demand(x,p):
 import numpy as np
 import matplotlib.pyplot as plt
 
-X = np.linspace(median_x/5,median_x*5,50)
+X = np.linspace(xref/5,xref*5,50)
 
-UseNutrients = ['Protein','Calories','Iron','Calcium']
+UseNutrients = ['Protein','Energy','Iron','Calcium','Vitamin C']
 
-df = pd.concat({myx:np.log(nutrient_demand(myx,p))[UseNutrients] for myx in X},axis=1).T
+df = pd.concat({myx:np.log(nutrient_demand(myx,pbar))[UseNutrients] for myx in X},axis=1).T
 ax = df.plot()
 
 ax.set_xlabel('log budget')
@@ -258,13 +244,11 @@ ax.set_ylabel('log nutrient')
  Now how does nutrition vary with prices?
 
  #+begin_src jupyter-python
-USE_GOOD = 'Jowar/Sorghum'
+USE_GOOD = 'Oranges'
 
-ref_price = r.prices.sel(i=USE_GOOD,t=t,m=m,drop=True)
+scale = np.geomspace(.01,10,50)
 
-P = np.linspace(1,5,20).tolist()
-
-ndf = pd.DataFrame({p0:np.log(nutrient_demand(median_x,my_prices(p0,i=USE_GOOD)))[UseNutrients] for p0 in P}).T
+ndf = pd.DataFrame({s:np.log(nutrient_demand(xref/2,my_prices(pbar[USE_GOOD]*s,j=USE_GOOD)))[UseNutrients] for s in scale}).T
 
 ax = ndf.plot()
 
@@ -283,30 +267,33 @@ ax.set_ylabel('log nutrient')
    unequal, or unrelated to individual requirements), but it is
    /necessary/ if all individuals are to have adequate nutrition.
 
-   For the average household in the ICRISAT villages, the number of
+   For the average household in our data, the number of
    different kinds of people can be computed by averaging over households:
 #+begin_src jupyter-python :results silent
 # In first round, averaged over households and villages
-zbar = r.z.sel(t=r.firstround,drop=True).mean(['j','m'])[:-1] # Leave out log HSize
+dbar = r.d.mean().iloc[:-2]
 #+end_src
 
-Now, the inner/dot/matrix product between =zbar= and the =rdi=
+Now, the inner/dot/matrix product between =dbar= and the =rdi=
 DataFrame of requirements will give us minimum requirements for the
 average household:
 #+begin_src jupyter-python
-# This matrix product gives minimum nutrient requirements for average
-# household in 1975.
-hh_rdi = rdi.replace('',0).T@zbar
+# This matrix product gives minimum nutrient requirements for
+# the average household
+hh_rdi = rdi.replace('',0)@dbar
 
+hh_rdi
 #+end_src
 
 * Nutritional Adequacy of Food Demands                            
 Since we can trace out demands for nutrients as a function of $(x,p)$,
 and we've computed minimum nutritional requirements for the average
 household, we can /normalize/ nutritional intake to check the adequacy
-of diet.
+of diet for a household with counts of different kinds of people given by =z=.
 #+begin_src jupyter-python :results silent
-def nutrient_adequacy_ratio(x,p):
+def nutrient_adequacy_ratio(x,p,d,rdi=rdi,days=7):
+    hh_rdi = rdi.replace('',0)@d*days
+
     return nutrient_demand(x,p)/hh_rdi
 #+end_src
 
@@ -318,24 +305,28 @@ actual nutrients to required nutrients is termed the "nutrient
 adequacy ratio," or NAR.
 
 #+begin_src jupyter-python
-plt.plot(X,pd.concat({x:np.log(nutrient_adequacy_ratio(x,p))[UseNutrients] for x in X},axis=1).T)
+X = np.geomspace(.01*xref,2*xref,100)
+
+pd.DataFrame({x:np.log(nutrient_adequacy_ratio(x,pbar,dbar))[UseNutrients] for x in X}).T.plot()
 plt.legend(UseNutrients)
-plt.xlabel('log budget')
+plt.xlabel('budget')
 plt.ylabel('log nutrient adequacy ratio')
 plt.axhline(0)
+plt.axvline(xref)
 #+end_src
 
 As before, we can also vary relative prices.  Here we trace out
 nutritional adequacy varying the price of a single good:
 #+begin_src jupyter-python
-poorer_x = median_x/2
+scale = np.geomspace(.01,2,50)
 
-plt.plot(pd.concat({p0:np.log(nutrient_adequacy_ratio(poorer_x,my_prices(p0,i=USE_GOOD)))[UseNutrients] for p0 in P},axis=1).T,P)
-plt.legend(UseNutrients)
-plt.ylabel('Price')
-plt.xlabel('log nutrient adequacy ratio')
-plt.axvline(0)
-plt.axhline(p.sel(i=USE_GOOD).values)
+ndf = pd.DataFrame({s*pbar[USE_GOOD]:np.log(nutrient_adequacy_ratio(xref/4,my_prices(pbar[USE_GOOD]*s,j=USE_GOOD),dbar))[UseNutrients] for s in scale}).T
+
+fig,ax = plt.subplots()
+ax.plot(ndf['Vitamin C'],ndf.index)
+ax.axhline(pbar[USE_GOOD])
+ax.axvline(0)
+
+ax.set_ylabel('Price')
+ax.set_xlabel('log nutrient adequacy ratio')
 #+end_src
-
-
