@@ -162,3 +162,13 @@ plt.ylabel(f"Price (relative to base of {pbar[use]:.2f})")
 plt.xlabel(f"Quantities of {use} Demanded")
 
 #+end_src
+*** Engel Curves
+
+#+begin_src jupyter-python
+fig,ax = plt.subplots()
+
+ax.plot(np.log(scale*xref),[r.expenditures(s*xref,pbar)/(scale*xref) for s in scale])
+ax.set_xlabel(f'log budget (relative to base of {xref:.0f}')
+ax.set_ylabel(f'Expenditure share')
+ax.set_title('Engel Curves')
+#+end_src
