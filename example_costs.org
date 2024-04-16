@@ -4,88 +4,214 @@
   :END:
 ** Preface
 
-   There are a few modules you may need to install:
- #+begin_src ipython
+   There are a few modules you may need to install (but avoid this if you can; you may need to restart your kernel afterwards):
+ #+begin_src jupyter-python
 #!pip install -r requirements.txt
  #+end_src
 
-   Some countries we have data for:
-#+begin_src ipython
-URL = {'Uganda':'https://docs.google.com/spreadsheets/d/1yVLriVpo7KGUXvR3hq_n53XpXlD5NmLaH1oOMZyV0gQ/',
-       'Tanzania':'https://docs.google.com/spreadsheets/d/1Tknc2F8K6SaA7j0R7J_NE8yJBTsCPPw77_Bfc04MY40/',
-       'Indian ICRISAT':'https://docs.google.com/spreadsheets/d/13Ig5hZif-NSHtgkKRp_cEgKXk0lOsdUB2BAD6O_FnRo'}
+** Data
+ We'll get data from two places.  First, basic data, including a food
+ conversion table and recommended daily intakes table can be found in
+ a google spreadsheet.
 
-DAYS_PER_PERIOD = {'Uganda':7,'Tanzania':7,'Indian ICRISAT':365.25} # Number of days of expenditure recall
+Here are addresses of google sheets for different dataframes for the
+case of Uganda:
+#+begin_src jupyter-python :tangle /tmp/foo.py
+InputFiles = {'Expenditures':('1yVLriVpo7KGUXvR3hq_n53XpXlD5NmLaH1oOMZyV0gQ','Expenditures (2019-20)'),
+              'Prices':('1yVLriVpo7KGUXvR3hq_n53XpXlD5NmLaH1oOMZyV0gQ','Prices'),
+              'HH Characteristics':('1yVLriVpo7KGUXvR3hq_n53XpXlD5NmLaH1oOMZyV0gQ','HH Characteristics'),
+              'FCT':('1yVLriVpo7KGUXvR3hq_n53XpXlD5NmLaH1oOMZyV0gQ','FCT'),
+              'RDI':('1yVLriVpo7KGUXvR3hq_n53XpXlD5NmLaH1oOMZyV0gQ','RDI'),}
 #+end_src
 
-Exploit fact that we've already estimated demand systems for a bunch
-of different countries.  Choose one:
+*** Prices, FCT, RDI
+#+begin_src jupyter-python :tangle /tmp/foo.py
+from eep153_tools.sheets import read_sheets
+import numpy as np
+import pandas as pd
 
- #+begin_src ipython
-import cfe
+def get_clean_sheet(key,sheet=None):
 
-COUNTRY = 'Uganda'
+    df = read_sheets(key,sheet=sheet)
+    df.columns = [c.strip() for c in df.columns.tolist()]
 
-# May need to unzip?
-#!gunzip Uganda_small.ds.gz
+    df = df.loc[:,~df.columns.duplicated(keep='first')]
 
-r = cfe.from_dataset("%s_small.ds" % COUNTRY,engine='netcdf4')
+    df = df.drop([col for col in df.columns if col.startswith('Unnamed')], axis=1)
 
+    df = df.loc[~df.index.duplicated(), :]
+
+    return df
+
+# Get prices
+p = get_clean_sheet(InputFiles['Prices'][0],
+                    sheet=InputFiles['Prices'][1])
+
+if 'm' not in p.columns:  # Supply "market" indicator if missing
+    p['m'] = 1
+
+p = p.set_index(['t','m'])
+p.columns.name = 'j'
+
+p = p.apply(lambda x: pd.to_numeric(x,errors='coerce'))
+p = p.replace(0,np.nan)
+
+fct = get_clean_sheet(InputFiles['FCT'][0],
+                    sheet=InputFiles['FCT'][1])
+
+fct = fct.set_index('j')
+fct.columns.name = 'n'
+
+fct = fct.apply(lambda x: pd.to_numeric(x,errors='coerce'))
+
+################## RDI, if available (consider using US) #####################
+rdi = get_clean_sheet(InputFiles['RDI'][0],
+                    sheet=InputFiles['RDI'][1])
+rdi = rdi.set_index('n')
+rdi.columns.name = 'k'
+#+end_src
+*** Pre-estimated Demand Systems
+ An instance =r= of =cfe.Regression= can be made persistent with
+ =r.to_pickle('my_result.pickle')=, which saves the instance "on disk", and can be loaded using =cfe.regression.read_pickle=.  We use  this method below to load data and demand system previously estimated for Uganda:
+#+begin_src jupyter-python
+import cfe.regression as rgsn
+
+r = rgsn.read_pickle('uganda_2019-20.pickle')  # Assumes you've already set this up e.g., in Project 3
  #+end_src
-
-
 ** Ceteris Paribus
 
     We begin by setting up some benchmarks for prices and budgets, so
     the things we don't want to change we can hold fixed.
-  #+begin_src ipython
+*** Reference Prices
+Choose reference prices.  Here we'll choose a particular year, and average prices across markets.  If you wanted to focus on particular market you'd do this differently.
+#+begin_src jupyter-python
+# Reference prices chosen from a particular time; average across place.
+# These are prices per kilogram:
+pbar = p.xs('2019-20',level='t').mean()
+pbar = pbar[r.beta.index] # Only use prices for goods we can estimate
+#+end_src
+
+*** Budgets
+
+Get food budget for all households, then find median budget:
+#+begin_src jupyter-python
 import numpy as np
 
-### First year, first market, and some good.  Change if you wish! ###
-my_t = r.coords['t'].data.flatten()[0] # Period
-my_m = r.coords['m'].data.flatten()[0] # Market
-my_i = 'bread' # r.coords['i'].data.flatten()[0] # Good
-#####################################################################
+xhat = r.predicted_expenditures()
 
-p = r.prices.sel(u='Kilogram (kg)',t=my_t,m=my_m,drop=True)
-phat = p.to_dataframe('i').dropna().squeeze()
+# Total food expenditures per household
+xbar = xhat.groupby(['i','t','m']).sum()
 
-ref_price = r.prices.sel(u='Kilogram (kg)',i=my_i,t=my_t,m=my_m)
-P = np.linspace(ref_price/10,ref_price*5,50)
+# Reference budget
+x0 = xbar.quantile(0.5)  # Household at 0.5 quantile is median
+#+end_src
 
-def my_prices(p0,p=phat,i=my_i):
+
+*** Changing one price, holding others fixed
+Finally, define a function to change a single price in the vector $p$:
+ #+begin_src jupyter-python :results silent
+def my_prices(p0,p=pbar,j='Millet'):
     """
-    Set price of good i to p0, holding remaining prices fixed at values in p.
+    Change price of jth good to p0, holding other prices fixed.
     """
     p = p.copy()
-    p.loc[i] = p0
-    return p.squeeze()
+    p.loc[j] = p0
+    return p
+ #+end_src
 
-phat
-  #+end_src
+** Mapping to Nutrition :noexport:
 
-** Simple Policy Experiments: Changing Budget
+** Mapping to Nutrients :noexport:
+*** FCT
+ We've seen how to map prices and budgets into vectors of consumption
+ quantities using =cfe.Regression.demands=.  Next we want to think about
+ how to map these into bundles of /nutrients/.  The information needed
+ for the mapping comes from a "Food Conversion Table" (or database,
+ such as the [[https://fdc.nal.usda.gov/][USDA Food Data Central]]).    We've already grabbed an FCT, let's take a look:
+ #+begin_src jupyter-python
+fct
+ #+end_src
 
- Consider two policies:  First, changing income so that some proportion
- of the population achieves nutritional adequacy.  Here choose quantile
- we're interested in (e.g., a quantile of 0.5 is the median; a quantile
- of 0.25 is the household at the 25th percentage point of the distribution).
+*** Food Quantities
+Get quantities of food by dividing expenditures by prices:
+#+begin_src jupyter-python
+qhat = (xhat.unstack('j')/pbar).dropna(how='all')
 
- #+begin_src ipython
+# Drop missing columns
+qhat = qhat.loc[:,qhat.count()>0]
 
-# Predicted budgets (sum of all expenditures for each household)
-xbar = r.get_predicted_expenditures().sel(t=my_t,m=my_m).sum('i')
-
-# Drop households with /no/ predicted expenditures
-xbar = xbar.where(xbar>0)
-
-# A quantile of 0.5 is the median.  Play with quantile value, or just assign.
-x0 = xbar.quantile(0.5,'j') # Budget (median household)
-#x0 = 50
-
-# Range of budgets to explore
-X = np.linspace(x0/10,x0*5,50)
+qhat
 #+end_src
+
+*** Derived Nutrient Demands
+ We need the index of the Food Conversion Table (FCT) to match up with
+ the index of the vector of quantities demanded.   To manage this we
+ make use of the =align= method for =pd.DataFrames=:
+ #+begin_src jupyter-python
+
+# Create a new FCT and vector of consumption that only share rows in common:
+fct0,c0 = fct.align(qhat.T,axis=0,join='inner')
+print(fct0.index)
+ #+end_src
+
+ Now, since rows of =fct0= and =c0= match, we can obtain nutritional
+ outcomes from the inner (or dot, or matrix) product of the transposed
+ =fct0= and =c0=:
+
+ #+begin_src jupyter-python
+# The @ operator means matrix multiply
+N = fct0.T@c0
+
+N  #NB: Uganda quantities are for previous 7 days
+ #+end_src
+
+ Of course, since we can compute the nutritional content of a vector of
+ consumption goods =c0=, we can also use our demand functions to
+ compute nutrition as a /function/ of prices and budget.
+
+ #+begin_src jupyter-python
+def nutrient_demand(x,p):
+    c = r.demands(x,p)
+    fct0,c0 = fct.align(c,axis=0,join='inner')
+    N = fct0.T@c0
+
+    N = N.loc[~N.index.duplicated()]
+
+    return N
+ #+end_src
+
+ With this =nutrient_demand= function in hand, we can see how nutrient
+ outcomes vary with budget, given prices:
+ #+begin_src jupyter-python
+import numpy as np
+import matplotlib.pyplot as plt
+
+X = np.linspace(x0/5,x0*5,100)
+
+UseNutrients = ['Protein','Energy','Iron','Calcium','Vitamin C']
+
+df = pd.concat({myx:np.log(nutrient_demand(myx,pbar))[UseNutrients] for myx in X},axis=1).T
+ax = df.plot()
+
+ax.set_xlabel('log budget')
+ax.set_ylabel('log nutrient')
+ #+end_src
+
+
+ Now how does nutrition vary with prices?
+
+ #+begin_src jupyter-python
+USE_GOOD = 'Oranges'
+
+scale = np.geomspace(.01,10,50)
+
+ndf = pd.DataFrame({s:np.log(nutrient_demand(x0/2,my_prices(pbar[USE_GOOD]*s,j=USE_GOOD)))[UseNutrients] for s in scale}).T
+
+ax = ndf.plot()
+
+ax.set_xlabel('log price')
+ax.set_ylabel('log nutrient')
+ #+end_src
 
 
 ** Simple Policy Experiments: Changing Prices
@@ -105,32 +231,33 @@ area under the *Hicksian* (or *compensated*) demand curve:
 
 [[./compensating_variation_newexpenditure.png]].
 
-
 *** Marshallian vs. Hicksian Demand Curves
 
 Let's look at Marshallian & Hicksian demands---one way of thinking
 about the Hicksian (compensated) curves is that they  eliminate the
 income effect associated with changing prices.
 
- #+begin_src ipython
+ #+begin_src jupyter-python
 import matplotlib.pyplot as plt
+%matplotlib inline
 
-#my_i = 'bread'  # Interesting Ugandan staple
+my_j = 'Millet'  # Interesting Ugandan staple
+
+P = np.geomspace(.01,10,50)*pbar[my_j]
 
 # Utility of median household, given prices
-U0 = r.indirect_utility(x0,p)  
+U0 = r.indirect_utility(x0,pbar)
 
-plt.plot([r.demands(x0,my_prices(p0,i=my_i))[my_i] for p0 in P],P)
-plt.plot([r.demands(U0,my_prices(p0,i=my_i),type="Hicksian")[my_i] for p0 in P],P)
+plt.plot([r.demands(x0,my_prices(p0,j=my_j))[my_j] for p0 in P],P)
+plt.plot([r.demands(U0,my_prices(p0,j=my_j),type="Hicksian")[my_j] for p0 in P],P)
 plt.ylabel('Price')
-plt.xlabel(my_i)
-#plt.axhline(p.sel(i=my_i).values)
+plt.xlabel(my_j)
 plt.legend(("Marshallian","Hicksian"))
  #+end_src
 
 
 *** Welfare measures
- #+begin_src ipython :results silent
+ #+begin_src jupyter-python :results silent
 def compensating_variation(U0,p0,p1):
     x0 = r.expenditure(U0,p0)
     x1 = r.expenditure(U0,p1)
@@ -162,16 +289,6 @@ def deadweight_loss(U0,p0,p1):
 
     return cv - revenue(U0,p0,p1,type='Hicksian') 
     
-    
-def compensated_nutrient_demand(U,p,z=None):
-    c = r.demands(U,p,z=z,type='Hicksian')
-    fct0,c0 = fct.align(c,axis=0,join='inner')
-    N = fct0.T@c0
-
-    return N
-
-def compensated_nutrient_adequacy_ratio(U,p):
-    return (compensated_nutrient_demand(U,p)/hh_rdi.T).squeeze()
 
  #+end_src
 
@@ -180,28 +297,28 @@ def compensated_nutrient_adequacy_ratio(U,p):
 Examine effects of price changes on revenue (if price change due to a
 tax or subsidy) and compensating variation.
 
- #+begin_src ipython
+ #+begin_src jupyter-python
 fig, ax1 = plt.subplots()
 
-ax1.plot(P,[compensating_variation(U0,phat,my_prices(p0,i=my_i)) for p0 in P])
-ax1.set_xlabel("Price of %s" % my_i)
+ax1.plot(P,[compensating_variation(U0,pbar,my_prices(p0,j=my_j)) for p0 in P])
+ax1.set_xlabel(f"Price of {my_j}")
 ax1.set_ylabel("Compensating Variation")
 
-ax1.plot(P,[revenue(U0,phat,my_prices(p0,i=my_i),type='Hicksian') for p0 in P],'k')
+ax1.plot(P,[revenue(U0,pbar,my_prices(p0,j=my_j),type='Hicksian') for p0 in P],'k')
 ax1.legend(('Compensating Variation','Revenue'))
 ax1.axhline(0)
-ax1.axvline(phat.loc[my_i])
+ax1.axvline(pbar.loc[my_j])
 
  #+end_src
 
 *** Deadweight Loss
 
 Differences between revenue and compensating variation is deadweight-loss:
- #+begin_src ipython
+ #+begin_src jupyter-python
 fig, ax1 = plt.subplots()
 
-ax1.plot(P,[deadweight_loss(U0,phat,my_prices(p0,i=my_i)) for p0 in P])
-ax1.set_xlabel("Price of %s" % my_i)
+ax1.plot(P,[deadweight_loss(U0,pbar,my_prices(p0,j=my_j)) for p0 in P])
+ax1.set_xlabel("Price of %s" % my_j)
 ax1.set_ylabel("Deadweight Loss")
  #+end_src
 
