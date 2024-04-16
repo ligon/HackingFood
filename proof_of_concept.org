@@ -9,18 +9,22 @@
   expenditure data.
 
   There are a few modules you may need to install:
-#+begin_src ipython
+#+begin_src jupyter-python
 !pip install -r requirements.txt
 #+end_src
 
   All the data required for estimation and calculation can be found
   in a google spreadsheet.  Choose one to explore!
-#+begin_src ipython
+#+begin_src jupyter-python
 COUNTRY = 'Nigeria'
 #+end_src
 
-#+begin_src ipython
-URL = {'Uganda':'https://docs.google.com/spreadsheets/d/1yVLriVpo7KGUXvR3hq_n53XpXlD5NmLaH1oOMZyV0gQ/',
+#+begin_src jupyter-python
+URL = {'Uganda':{'Expenditures':('1yVLriVpo7KGUXvR3hq_n53XpXlD5NmLaH1oOMZyV0gQ','Expenditures (2019-20)'),
+                 'Prices':('1yVLriVpo7KGUXvR3hq_n53XpXlD5NmLaH1oOMZyV0gQ','Prices'),
+                 'HH Characteristics':('1yVLriVpo7KGUXvR3hq_n53XpXlD5NmLaH1oOMZyV0gQ','HH Characteristics'),
+                 'FCT':('1yVLriVpo7KGUXvR3hq_n53XpXlD5NmLaH1oOMZyV0gQ','FCT'),
+                 'RDI':('1yVLriVpo7KGUXvR3hq_n53XpXlD5NmLaH1oOMZyV0gQ','RDI')},
        'Tanzania':'https://docs.google.com/spreadsheets/d/1Tknc2F8K6SaA7j0R7J_NE8yJBTsCPPw77_Bfc04MY40/',
        'ICRISAT':'https://docs.google.com/spreadsheets/d/13Ig5hZif-NSHtgkKRp_cEgKXk0lOsdUB2BAD6O_FnRo',
        'Nigeria':{'Expenditures':'https://docs.google.com/spreadsheets/d/1qzz6XGhPWLZLmwjrUY4W9k9U2PYukWblQKXWu0l37C4/',
@@ -35,30 +39,12 @@ DAYS_PER_PERIOD = {'Uganda':7,'Tanzania':7,'ICRISAT':365.25,'Nigeria':7} # Numbe
 ** Estimation
    You may already have access to an estimated demand system.  If so,
    use it!  Then you can skip down to "Plotting Food Demands".
-#+begin_src ipython
-import cfe
-import numpy as np
-
-# Might need to decompress a file (if it ends in ".gz")
-#!gunzip Niger_small.ds.gz
-
-DS = {'Niger':'Niger_small.ds',  
-      'Nigeria':'Nigeria_small.ds',  
-      'Ethiopia':'Ethiopia_small.ds',
-      'ICRISAT':'Indian ICRISAT_small.ds',
-      'Malawi':'Malawi_small.ds',
-      'Tanzania':'Tanzania_small.ds',
-      'Uganda':'Uganda_small.ds'}
-
-
-r = cfe.from_dataset(DS[COUNTRY],engine='netcdf4')
-#+end_src
-
    Otherwise, we pull in data on expenditures, household characteristics,
    and price:
 
-#+begin_src ipython 
+#+begin_src jupyter-python
 import cfe
+import pandas as pd
 import numpy as np
 from eep153_tools.sheets import read_sheets
 
@@ -66,120 +52,141 @@ x = read_sheets(URL[COUNTRY],sheet='Expenditures')
 
 if len(x.columns==5): # stored as a series
     x = x.set_index(['j','t','m','i']).squeeze()
-    x = x.unstack('i')
-else:    
+else:
     x = x.set_index(['j','t','m'])
     x.columns.name = 'i'
-    
-x = x.replace(0,np.nan)
+    x = x.stack().dropna()
+x.index.names = ['i','t','m','j']
+
+x = x.replace(0,np.nan).dropna()
+
 y = np.log(x)
 
 z = read_sheets(URL[COUNTRY],sheet='HH Characteristics').set_index(['j','t','m'])
 z.columns.name = 'k'
+z.index.names=['i','t','m']
 
 p = read_sheets(URL[COUNTRY],sheet='Prices').set_index(['t','m'])
-p.columns.name = 'i'
+p.columns.name = 'j'
 #+end_src
 
 Let's take a look at the  different periods that appear in the
 data. If you can't estimate (the next step) because your kernel dies
 it may be that you should use a subset of the periods.
-#+begin_src ipython
-use_periods = "t in %s" % str(p.index.levels[0].tolist())
+#+begin_src jupyter-python
+use_periods = p.index.levels[0].tolist()
 
 # If you want to use just a subset of periods, redefine
 # use_periods here; e.g.,
 #
-#use_periods ="t in ['2015Q3','2016Q1','2018Q3','2019Q1']"
+use_periods = ['2015Q3','2016Q1']
+y = y.loc[y.index.get_level_values('t').isin(use_periods)]
+z = z.loc[z.index.get_level_values('t').isin(use_periods)]
+p = p.loc[p.index.get_level_values('t').isin(use_periods)]
 
 use_periods
 #+end_src
 
 Next, we construct an object we can use in the estimation.
 
-#+begin_src ipython
-r = cfe.Result(y=y.query(use_periods),
-               z=z.query(use_periods),
-               prices=p.query(use_periods))
+#+begin_src jupyter-python
+r = cfe.Regression(y=y,d=z)
 #+end_src
 
 
 Next, we estimate CFE demands /given/ the prices and budgets of households in the data.
-#+begin_src ipython
-r.get_alpha()
-xhat = r.get_predicted_expenditures()
+#+begin_src jupyter-python
+xhat = r.predicted_expenditures()
 #+end_src
 
 Estimation is kind of expensive, so you might want to save these
 results to use in your later code.
-#+begin_src ipython
-r.to_dataset("my %s.ds" % COUNTRY)
+#+begin_src jupyter-python
+r.to_pickle("my %s.pickle" % COUNTRY)
 #+end_src
 
 ** Plotting Food Demands
    Now we're interested in predicting what quantities of different
    kinds of food /would/ have been, if something (e.g., a price,
    budget, household characteristics) was different.
+*** Ceteris Paribus
 
-*** Ceteris paribus
-   We begin by setting up some benchmarks for prices and budgets, so
-   the things we don't want to change we can hold fixed.
- #+begin_src ipython
-### First year, first market, and some good.  Change if you wish! ###
-my_t = r.coords['t'].data.flatten()[0]
-my_m = r.coords['m'].data.flatten()[0]
-my_i = r.get_beta(as_df=True).sort_values(ascending=False).index[0]
-#####################################################################
+    We begin by setting up some benchmarks for prices and budgets, so
+    the things we don't want to change we can hold fixed.
+**** Reference Prices
+Choose reference prices.  Here we'll choose a particular year, and average prices across markets.  If you wanted to focus on particular market you'd do this differently.
+#+begin_src jupyter-python
+# Reference prices chosen from a particular time; average across place.
+# These are prices per kilogram:
+my_t = use_periods[0]  # Choose from periods available in your dataset!
 
-# Choice of unit will depend on data...
-p = r.prices.sel(u='Kilograms',t=my_t,m=my_m,drop=True)  
-phat = p.to_dataframe('i').dropna().squeeze()
+pbar = p.xs(my_t,level='t').mean()
+pbar = pbar[r.beta.index] # Only use prices for goods we can estimate
 
-def my_prices(p0,p=phat,i=my_i):
-    """
-    Set price of good i to p0, holding remaining prices fixed at values in p.
-    """
-    p = p.copy()
-    p.loc[i] = p0
-    return p.squeeze()
- #+end_src
+my_j = 'Onions'  # Choose a reference good for analysis; should satisfy
 
- So, we have a budget for median household at that time and place
-#+begin_src ipython
-xbar = r.get_predicted_expenditures().sum('i')
-median_x = xbar.where(xbar>0).sel(t=my_t,m=my_m).median('j') # Budget (median household)
+assert my_j in pbar.index, f"The label {my_j} does not match a good for which demands have been estimated."
 #+end_src
 
-*** Plot demand schedule
-#+begin_src ipython
+**** Budgets
+
+Get food budget for all households, then find median budget:
+#+begin_src jupyter-python
+import numpy as np
+
+xhat = r.predicted_expenditures()
+
+# Total food expenditures per household
+xbar = xhat.groupby(['i','t','m']).sum()
+
+# Reference budget
+x0 = xbar.quantile(0.5)  # Household at 0.5 quantile is median
+
+f"Median income is {x0} in local currency."
+#+end_src
+
+
+**** Changing one price, holding others fixed
+Finally, define a function to change a single price in the vector $p$:
+ #+begin_src jupyter-python :results silent
+def my_prices(p0,p=pbar,j=my_j):
+    """
+    Change price of jth good to p0, holding other prices fixed.
+    """
+    p = p.copy()
+    p.loc[j] = p0
+    return p
+ #+end_src
+
+
+**** Plot demand schedule
+#+begin_src jupyter-python
 import matplotlib.pyplot as plt
 %matplotlib inline
 
 # Values for prices
-ref_price = r.prices.sel(u='Kilograms',i=my_i,t=my_t,m=my_m)
+ref_price = pbar[my_j]
 P = np.linspace(ref_price/5,ref_price*5,50)
 
-for x in [median_x*s for s in [.25,.5,1.,2,4]]:
-    plt.plot([r.demands(x,my_prices(p0))[my_i] for p0 in P],P)
+for x in [x0*s for s in [.25,.5,1.,2,4]]:
+    plt.plot([r.demands(x,my_prices(p0))[my_j] for p0 in P],P)
 
-plt.xlabel(my_i)
-plt.ylabel('Price of %s' % my_i)
+plt.xlabel(my_j)
+plt.ylabel(f'Price of {my_j}')
 #+end_src
 ** Plotting Nutrient Demands
    The nutrient value of food consumed by the household is just the
    product of its diet and a food conversion table.  So let's write a
    function that describes that product:
- #+begin_src ipython
+ #+begin_src jupyter-python
 from eep153_tools.sheets import read_sheets
+import warnings
 
 # Get FCT:
 fct = read_sheets(URL[COUNTRY],
                   sheet='FCT').set_index('i')
 fct.columns.name='n'
 
-
- #+begin_src ipython
-import warnings 
 
 def nutrient_demand(x,p):
     with warnings.catch_warnings():
@@ -190,22 +197,22 @@ def nutrient_demand(x,p):
     N = fct0.T@c0
 
     N = N.loc[~N.index.duplicated()]
-    
+
     return N
  #+end_src
 
  With this =nutrient_demand= function in hand, we can see how nutrient
  outcomes vary with budget, given prices:
- #+begin_src ipython
+ #+begin_src jupyter-python
 import numpy as np
 import pandas as pd
 
-X = np.linspace(median_x/5,median_x*5,50)
+X = np.linspace(x0/5,x0*5,50)
 
 # UseNutrients = ['Protein','Calories','Iron','Calcium']
 UseNutrients = fct.columns.tolist()
 
-plt.plot(X,[np.log(nutrient_demand(x,p))[UseNutrients] for x in X])
+plt.plot(X,[np.log(nutrient_demand(x,pbar))[UseNutrients] for x in X])
 plt.legend(UseNutrients)
 plt.xlabel('Budget')
 plt.ylabel('log nutrient')
@@ -215,7 +222,7 @@ plt.ylabel('log nutrient')
 ** Nutritional requirements
  Individuals have nutritional requirements established by nutrition
  scientists.  Here we grab one such set of requirements:
- #+begin_src ipython
+ #+begin_src jupyter-python
 rdi = read_sheets(URL[COUNTRY],
                   sheet='RDI').set_index('n').replace(np.nan,0)
 rdi.columns.name = 'k'
@@ -236,15 +243,15 @@ rdi
 
     For the average household, the number of different kinds of people
     can be computed by averaging over households:
- #+begin_src ipython :results silent
+ #+begin_src jupyter-python :results silent
 # Find average household characteristics for reference period & place
-zbar = r.z.sel(t=my_t,m=my_m,drop=True).mean('j').to_dataframe()
+zbar = r.d.mean()
  #+end_src
 
  Now, the inner/dot/matrix product between =zbar= and the =rda=
  DataFrame of requirements will give us minimum requirements for the
  average household:
- #+begin_src ipython
+ #+begin_src jupyter-python
 
 # This matrix product gives minimum nutrient requirements for average
 # household in reference year & place
@@ -261,7 +268,7 @@ hh_rdi
  and we've computed minimum nutritional requirements for the average
  household, we can /normalize/ nutritional intake to check the adequacy
  of diet.
- #+begin_src ipython :results silent
+ #+begin_src jupyter-python :results silent
 def nutrient_adequacy_ratio(x,p):
     return (nutrient_demand(x,p)/hh_rdi.T).squeeze()
  #+end_src
@@ -273,8 +280,8 @@ def nutrient_adequacy_ratio(x,p):
  actual nutrients to required nutrients is termed the "nutrient
  adequacy ratio," or NAR.
 
- #+begin_src ipython
-plt.plot(X,[np.log(nutrient_adequacy_ratio(x,p))[UseNutrients] for x in X])
+ #+begin_src jupyter-python
+plt.plot(X,[np.log(nutrient_adequacy_ratio(x,pbar))[UseNutrients] for x in X])
 plt.legend(UseNutrients)
 plt.xlabel('Budget')
 plt.ylabel('log nutrient adequacy ratio')
@@ -283,14 +290,14 @@ plt.axhline(0)
 
  As before, we can also vary relative prices.  Here we trace out
  nutritional adequacy varying the price of a single good:
- #+begin_src ipython
-poorer_x = median_x/2
+ #+begin_src jupyter-python
+poorer_x = x0/2
 
-plt.plot([np.log(nutrient_adequacy_ratio(poorer_x,my_prices(p0,i=my_i)))[UseNutrients] for p0 in P],P)
+plt.plot([np.log(nutrient_adequacy_ratio(poorer_x,my_prices(p0,j=my_j)))[UseNutrients] for p0 in P],P)
 plt.legend(UseNutrients)
 plt.ylabel('Price')
 plt.xlabel('log nutrient adequacy ratio')
 plt.axvline(0)
-plt.axhline(phat[my_i])
+plt.axhline(phat[my_j])
  #+end_src
 

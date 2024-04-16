@@ -4,7 +4,7 @@
   :END:
 ** Preface
 
-   There are a few modules you may need to install:
+   There are a few modules you may need to install (but avoid this if you can; you may need to restart your kernel afterwards):
  #+begin_src jupyter-python
 #!pip install -r requirements.txt
  #+end_src
@@ -20,16 +20,42 @@ from example_nutrition import rdi, nutrient_demand
 
     We begin by setting up some benchmarks for prices and budgets, so
     the things we don't want to change we can hold fixed.
-  #+begin_src jupyter-python
+
+#+begin_src jupyter-python
 from example_nutrition import pbar, my_prices
-  #+end_src
+#+end_src
 
-** Simple Policy Experiments: Changing Budget
+*** Budgets
 
- Consider two policies:  First, changing income so that some proportion
- of the population achieves nutritional adequacy.  Here choose quantile
- we're interested in (e.g., a quantile of 0.5 is the median; a quantile
- of 0.25 is the household at the 25th percentage point of the distribution).
+Get food budget for all households, then find median budget:
+#+begin_src jupyter-python
+import numpy as np
+
+xhat = r.predicted_expenditures()
+
+# Total food expenditures per household
+xbar = xhat.groupby(['i','t','m']).sum()
+
+# Reference budget
+x0 = xbar.quantile(0.5)  # Household at 0.5 quantile is median
+#+end_src
+
+
+** Mapping to Nutrients :noexport:
+*** FCT
+ We've seen how to map prices and budgets into vectors of consumption
+ quantities using =cfe.Regression.demands=.  Next we want to think about
+ how to map these into bundles of /nutrients/.  The information needed
+ for the mapping comes from a "Food Conversion Table" (or database,
+ such as the [[https://fdc.nal.usda.gov/][USDA Food Data Central]]).    We've already grabbed an FCT, let's take a look:
+ #+begin_src jupyter-python
+fct
+ #+end_src
+
+*** Food Quantities
+Get quantities of food by dividing expenditures by prices:
+#+begin_src jupyter-python
+qhat = (xhat.unstack('j')/pbar).dropna(how='all')
 
  #+begin_src jupyter-python
 
@@ -44,7 +70,42 @@ x0 = xbar.quantile(0.5) # Budget (median household)
 
 # Range of budgets to explore
 X = np.linspace(x0/10,x0*5,50)
+
 #+end_src
+
+
+ With this =nutrient_demand= function in hand, we can see how nutrient
+ outcomes vary with budget, given prices:
+ #+begin_src jupyter-python
+import numpy as np
+import matplotlib.pyplot as plt
+
+X = np.linspace(x0/5,x0*5,100)
+
+UseNutrients = ['Protein','Energy','Iron','Calcium','Vitamin C']
+
+df = pd.concat({myx:np.log(nutrient_demand(myx,pbar))[UseNutrients] for myx in X},axis=1).T
+ax = df.plot()
+
+ax.set_xlabel('log budget')
+ax.set_ylabel('log nutrient')
+ #+end_src
+
+
+ Now how does nutrition vary with prices?
+
+ #+begin_src jupyter-python
+USE_GOOD = 'Oranges'
+
+scale = np.geomspace(.01,10,50)
+
+ndf = pd.DataFrame({s:np.log(nutrient_demand(x0/2,my_prices(pbar[USE_GOOD]*s,j=USE_GOOD)))[UseNutrients] for s in scale}).T
+
+ax = ndf.plot()
+
+ax.set_xlabel('log price')
+ax.set_ylabel('log nutrient')
+ #+end_src
 
 
 ** Simple Policy Experiments: Changing Prices
@@ -64,7 +125,6 @@ area under the *Hicksian* (or *compensated*) demand curve:
 
 [[./compensating_variation_newexpenditure.png]].
 
-
 *** Marshallian vs. Hicksian Demand Curves
 
 Let's look at Marshallian & Hicksian demands---one way of thinking
@@ -73,17 +133,19 @@ income effect associated with changing prices.
 
  #+begin_src jupyter-python
 import matplotlib.pyplot as plt
+%matplotlib inline
 
-#my_i = 'bread'  # Interesting Ugandan staple
+my_j = 'Millet'  # Interesting Ugandan staple
+
+P = np.geomspace(.01,10,50)*pbar[my_j]
 
 # Utility of median household, given prices
-U0 = r.indirect_utility(x0,p)  
+U0 = r.indirect_utility(x0,pbar)
 
-plt.plot([r.demands(x0,my_prices(p0,i=my_i))[my_i] for p0 in P],P)
-plt.plot([r.demands(U0,my_prices(p0,i=my_i),type="Hicksian")[my_i] for p0 in P],P)
+plt.plot([r.demands(x0,my_prices(p0,j=my_j))[my_j] for p0 in P],P)
+plt.plot([r.demands(U0,my_prices(p0,j=my_j),type="Hicksian")[my_j] for p0 in P],P)
 plt.ylabel('Price')
-plt.xlabel(my_i)
-#plt.axhline(p.sel(i=my_i).values)
+plt.xlabel(my_j)
 plt.legend(("Marshallian","Hicksian"))
  #+end_src
 
@@ -121,16 +183,6 @@ def deadweight_loss(U0,p0,p1):
 
     return cv - revenue(U0,p0,p1,type='Hicksian') 
     
-    
-def compensated_nutrient_demand(U,p,z=None):
-    c = r.demands(U,p,z=z,type='Hicksian')
-    fct0,c0 = fct.align(c,axis=0,join='inner')
-    N = fct0.T@c0
-
-    return N
-
-def compensated_nutrient_adequacy_ratio(U,p):
-    return (compensated_nutrient_demand(U,p)/hh_rdi.T).squeeze()
 
  #+end_src
 
@@ -142,14 +194,14 @@ tax or subsidy) and compensating variation.
  #+begin_src jupyter-python
 fig, ax1 = plt.subplots()
 
-ax1.plot(P,[compensating_variation(U0,phat,my_prices(p0,i=my_i)) for p0 in P])
-ax1.set_xlabel("Price of %s" % my_i)
+ax1.plot(P,[compensating_variation(U0,pbar,my_prices(p0,j=my_j)) for p0 in P])
+ax1.set_xlabel(f"Price of {my_j}")
 ax1.set_ylabel("Compensating Variation")
 
-ax1.plot(P,[revenue(U0,phat,my_prices(p0,i=my_i),type='Hicksian') for p0 in P],'k')
+ax1.plot(P,[revenue(U0,pbar,my_prices(p0,j=my_j),type='Hicksian') for p0 in P],'k')
 ax1.legend(('Compensating Variation','Revenue'))
 ax1.axhline(0)
-ax1.axvline(phat.loc[my_i])
+ax1.axvline(pbar.loc[my_j])
 
  #+end_src
 
@@ -159,8 +211,8 @@ Differences between revenue and compensating variation is deadweight-loss:
  #+begin_src jupyter-python
 fig, ax1 = plt.subplots()
 
-ax1.plot(P,[deadweight_loss(U0,phat,my_prices(p0,i=my_i)) for p0 in P])
-ax1.set_xlabel("Price of %s" % my_i)
+ax1.plot(P,[deadweight_loss(U0,pbar,my_prices(p0,j=my_j)) for p0 in P])
+ax1.set_xlabel("Price of %s" % my_j)
 ax1.set_ylabel("Deadweight Loss")
  #+end_src
 
