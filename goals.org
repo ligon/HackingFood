@@ -36,7 +36,9 @@ desirability or nutritional content of food.
 ** [#A] Replicability & Documentation
    Create a public repository on =github.com= to contain all your code and
    data, also with documentation which is good enough to allow other
-   students outside your group to replicate your findings.  
+   students outside your group to replicate your findings.
+*** Create a =README.md= file on your =github.com= repo
+This should give enough information to allow a visitor to your repo to understand what the project is about, and how to use your code.
 
 ** [#A] Document Goals
 
@@ -45,6 +47,11 @@ desirability or nutritional content of food.
    tasks need to be accomplished, and who will accomplish them?
 
    Update this post as the project proceeds.
+
+** [#A] Unit tests
+Unit tests are a great tool for designing and testing code you produce as a team.
+
+The idea: for any function your team plans to write, think of some tests you'd expect the function to pass /even before/ the function is written. Using the =python= =assert= keyword can be very useful. (there are also more powerful and complex approaches, including the =unittest= module).  Isolate your unit tests into a separate file, and
 
 ** [#A] Choice of a dataset
         You are free (indeed, encouraged) to use one of the datasets

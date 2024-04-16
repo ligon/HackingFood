@@ -1,7 +1,7 @@
 * Preface
 
 First, install =CFEDemand= package if necessary:
-#+begin_src ipython 
+#+begin_src jupyter-python
 !pip install CFEDemands --upgrade
 
 #+end_src
@@ -11,7 +11,7 @@ First, install =CFEDemand= package if necessary:
 Compare Marshallian (uncompensated) and Hicksian (compensated)
 demands:
 
-#+begin_src ipython
+#+begin_src jupyter-python
 from costs_preface import *
 
 #USE_GOOD = 'Rice'
@@ -29,7 +29,7 @@ plt.legend(("Marshallian","Hicksian"))
 
 
 Define some useful functions for measuring costs:
-#+begin_src ipython :results silent
+#+begin_src jupyter-python :results silent
 def compensating_variation(U0,p0,p1):
     x0 = r.expenditure(U0,p0)
     x1 = r.expenditure(U0,p1)
@@ -70,7 +70,7 @@ def compensated_nutrient_adequacy_ratio(U,p):
 
 #+end_src
 
-#+begin_src ipython
+#+begin_src jupyter-python
 fig,ax2 = plt.subplots()
 ax2.set_ylabel('log NAR')
 ax2.plot(P,[np.log(compensated_nutrient_adequacy_ratio(U0,my_prices(p0))[UseNutrients]) for p0 in P])
@@ -79,7 +79,7 @@ ax2.axhline(0)
 ax2.set_xlabel("Price of %s" % USE_GOOD)
 #+end_src
 
-#+begin_src ipython
+#+begin_src jupyter-python
 fig, ax1 = plt.subplots()
 
 ax1.plot(P,[compensating_variation(U0,p,my_prices(p0)) for p0 in P])

@@ -90,7 +90,7 @@ rdi.columns.name = 'k'
  An instance =r= of =cfe.Regression= can be made persistent with
  =r.to_pickle('my_result.pickle')=, which saves the instance "on disk", and can be loaded using =cfe.regression.read_pickle=.  We use  this method below to load data and demand system previously estimated for Uganda:
 #+begin_src jupyter-python
-r = rgsn.read_pickle('uganda_2019-20.pickle')  # Assumes you've already set this up e.g., in Project 3
+r = rgsn.read_pickle('uganda_2019-20.rgsn')  # Assumes you've already set this up e.g., in Project 3
  #+end_src
 
 *** Reference Prices
@@ -142,7 +142,7 @@ def my_prices(p0,p=pbar,j='Millet'):
 *** Demand functions
 #+begin_src jupyter-python
 import matplotlib.pyplot as plt
-%matplotlib notebook
+%matplotlib inline
 
 use = 'Millet'  # Good we want demand curve for
 

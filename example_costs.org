@@ -5,63 +5,23 @@
 ** Preface
 
    There are a few modules you may need to install:
- #+begin_src ipython
+ #+begin_src jupyter-python
 #!pip install -r requirements.txt
  #+end_src
 
-   Some countries we have data for:
-#+begin_src ipython
-URL = {'Uganda':'https://docs.google.com/spreadsheets/d/1yVLriVpo7KGUXvR3hq_n53XpXlD5NmLaH1oOMZyV0gQ/',
-       'Tanzania':'https://docs.google.com/spreadsheets/d/1Tknc2F8K6SaA7j0R7J_NE8yJBTsCPPw77_Bfc04MY40/',
-       'Indian ICRISAT':'https://docs.google.com/spreadsheets/d/13Ig5hZif-NSHtgkKRp_cEgKXk0lOsdUB2BAD6O_FnRo'}
-
-DAYS_PER_PERIOD = {'Uganda':7,'Tanzania':7,'Indian ICRISAT':365.25} # Number of days of expenditure recall
+We import critical objects from =example_nutrition.py=, avoiding the need to do so in this notebook.  These are for Uganda:
+#+begin_src jupyter-python
+from example_nutrition import r as uga
+from example_nutrition import rdi, nutrient_demand
 #+end_src
-
-Exploit fact that we've already estimated demand systems for a bunch
-of different countries.  Choose one:
-
- #+begin_src ipython
-import cfe
-
-COUNTRY = 'Uganda'
-
-# May need to unzip?
-#!gunzip Uganda_small.ds.gz
-
-r = cfe.from_dataset("%s_small.ds" % COUNTRY,engine='netcdf4')
-
- #+end_src
 
 
 ** Ceteris Paribus
 
     We begin by setting up some benchmarks for prices and budgets, so
     the things we don't want to change we can hold fixed.
-  #+begin_src ipython
-import numpy as np
-
-### First year, first market, and some good.  Change if you wish! ###
-my_t = r.coords['t'].data.flatten()[0] # Period
-my_m = r.coords['m'].data.flatten()[0] # Market
-my_i = 'bread' # r.coords['i'].data.flatten()[0] # Good
-#####################################################################
-
-p = r.prices.sel(u='Kilogram (kg)',t=my_t,m=my_m,drop=True)
-phat = p.to_dataframe('i').dropna().squeeze()
-
-ref_price = r.prices.sel(u='Kilogram (kg)',i=my_i,t=my_t,m=my_m)
-P = np.linspace(ref_price/10,ref_price*5,50)
-
-def my_prices(p0,p=phat,i=my_i):
-    """
-    Set price of good i to p0, holding remaining prices fixed at values in p.
-    """
-    p = p.copy()
-    p.loc[i] = p0
-    return p.squeeze()
-
-phat
+  #+begin_src jupyter-python
+from example_nutrition import pbar, my_prices
   #+end_src
 
 ** Simple Policy Experiments: Changing Budget
@@ -71,17 +31,16 @@ phat
  we're interested in (e.g., a quantile of 0.5 is the median; a quantile
  of 0.25 is the household at the 25th percentage point of the distribution).
 
- #+begin_src ipython
+ #+begin_src jupyter-python
 
 # Predicted budgets (sum of all expenditures for each household)
-xbar = r.get_predicted_expenditures().sel(t=my_t,m=my_m).sum('i')
+xbar = uga.predicted_expenditures().groupby(['i','t']).sum()
 
 # Drop households with /no/ predicted expenditures
 xbar = xbar.where(xbar>0)
 
 # A quantile of 0.5 is the median.  Play with quantile value, or just assign.
-x0 = xbar.quantile(0.5,'j') # Budget (median household)
-#x0 = 50
+x0 = xbar.quantile(0.5) # Budget (median household)
 
 # Range of budgets to explore
 X = np.linspace(x0/10,x0*5,50)
@@ -112,7 +71,7 @@ Let's look at Marshallian & Hicksian demands---one way of thinking
 about the Hicksian (compensated) curves is that they  eliminate the
 income effect associated with changing prices.
 
- #+begin_src ipython
+ #+begin_src jupyter-python
 import matplotlib.pyplot as plt
 
 #my_i = 'bread'  # Interesting Ugandan staple
@@ -130,7 +89,7 @@ plt.legend(("Marshallian","Hicksian"))
 
 
 *** Welfare measures
- #+begin_src ipython :results silent
+ #+begin_src jupyter-python :results silent
 def compensating_variation(U0,p0,p1):
     x0 = r.expenditure(U0,p0)
     x1 = r.expenditure(U0,p1)
@@ -180,7 +139,7 @@ def compensated_nutrient_adequacy_ratio(U,p):
 Examine effects of price changes on revenue (if price change due to a
 tax or subsidy) and compensating variation.
 
- #+begin_src ipython
+ #+begin_src jupyter-python
 fig, ax1 = plt.subplots()
 
 ax1.plot(P,[compensating_variation(U0,phat,my_prices(p0,i=my_i)) for p0 in P])
@@ -197,7 +156,7 @@ ax1.axvline(phat.loc[my_i])
 *** Deadweight Loss
 
 Differences between revenue and compensating variation is deadweight-loss:
- #+begin_src ipython
+ #+begin_src jupyter-python
 fig, ax1 = plt.subplots()
 
 ax1.plot(P,[deadweight_loss(U0,phat,my_prices(p0,i=my_i)) for p0 in P])

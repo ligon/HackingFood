@@ -1,6 +1,7 @@
 * Nutrient Demands
   :PROPERTIES:
   :EXPORT_FILE_NAME: ../Materials/Project4/example_nutrition.ipynb
+  :header-args: :tangle ../Materials/Project4/example_nutrition.py
   :END:
 ** Introduction
  In our last project we used data to estimate systems of food demand
@@ -32,7 +33,7 @@ import cfe.regression as rgsn
 
 Here are addresses of google sheets for different dataframes for the
 case of Uganda:
-#+begin_src jupyter-python :tangle /tmp/foo.py
+#+begin_src jupyter-python 
 InputFiles = {'Expenditures':('1yVLriVpo7KGUXvR3hq_n53XpXlD5NmLaH1oOMZyV0gQ','Expenditures (2019-20)'),
               'Prices':('1yVLriVpo7KGUXvR3hq_n53XpXlD5NmLaH1oOMZyV0gQ','Prices'),
               'HH Characteristics':('1yVLriVpo7KGUXvR3hq_n53XpXlD5NmLaH1oOMZyV0gQ','HH Characteristics'),
@@ -41,30 +42,14 @@ InputFiles = {'Expenditures':('1yVLriVpo7KGUXvR3hq_n53XpXlD5NmLaH1oOMZyV0gQ','Ex
 #+end_src
 
 *** Prices, FCT, RDI
-#+begin_src jupyter-python :tangle /tmp/foo.py
+#+begin_src jupyter-python 
 from eep153_tools.sheets import read_sheets
 import numpy as np
 import pandas as pd
 
-def get_clean_sheet(key,sheet=None):
-
-    df = read_sheets(key,sheet=sheet)
-    df.columns = [c.strip() for c in df.columns.tolist()]
-
-    df = df.loc[:,~df.columns.duplicated(keep='first')]
-
-    df = df.drop([col for col in df.columns if col.startswith('Unnamed')], axis=1)
-
-    df = df.loc[~df.index.duplicated(), :]
-
-    return df
-
 # Get prices
-p = get_clean_sheet(InputFiles['Prices'][0],
-                    sheet=InputFiles['Prices'][1])
-
-if 'm' not in p.columns:  # Supply "market" indicator if missing
-    p['m'] = 1
+p = read_sheets(InputFiles['Prices'][0],
+                sheet=InputFiles['Prices'][1])
 
 p = p.set_index(['t','m'])
 p.columns.name = 'j'
@@ -72,8 +57,8 @@ p.columns.name = 'j'
 p = p.apply(lambda x: pd.to_numeric(x,errors='coerce'))
 p = p.replace(0,np.nan)
 
-fct = get_clean_sheet(InputFiles['FCT'][0],
-                    sheet=InputFiles['FCT'][1])
+fct = read_sheets(InputFiles['FCT'][0],
+                  sheet=InputFiles['FCT'][1])
 
 fct = fct.set_index('j')
 fct.columns.name = 'n'
@@ -81,8 +66,8 @@ fct.columns.name = 'n'
 fct = fct.apply(lambda x: pd.to_numeric(x,errors='coerce'))
 
 ################## RDI, if available (consider using US) #####################
-rdi = get_clean_sheet(InputFiles['RDI'][0],
-                    sheet=InputFiles['RDI'][1])
+rdi = read_sheets(InputFiles['RDI'][0],
+                  sheet=InputFiles['RDI'][1])
 rdi = rdi.set_index('n')
 rdi.columns.name = 'k'
 #+end_src
@@ -90,7 +75,7 @@ rdi.columns.name = 'k'
  An instance =r= of =cfe.Regression= can be made persistent with
  =r.to_pickle('my_result.pickle')=, which saves the instance "on disk", and can be loaded using =cfe.regression.read_pickle=.  We use  this method below to load data and demand system previously estimated for Uganda:
 #+begin_src jupyter-python
-r = rgsn.read_pickle('uganda_2019-20.pickle')  # Assumes you've already set this up e.g., in Project 3
+r = rgsn.read_pickle('../Project3/uganda_estimates.rgsn')  # Assumes you've already set this up e.g., in Project 3
  #+end_src
 
 *** Reference Prices
@@ -143,7 +128,7 @@ def my_prices(p0,p=pbar,j='Millet'):
 *** Demand functions
 #+begin_src jupyter-python
 import matplotlib.pyplot as plt
-%matplotlib notebook
+%matplotlib inline
 
 use = 'Millet'  # Good we want demand curve for
 
@@ -271,7 +256,7 @@ ax.set_ylabel('log nutrient')
    different kinds of people can be computed by averaging over households:
 #+begin_src jupyter-python :results silent
 # In first round, averaged over households and villages
-dbar = r.d.mean().iloc[:-2]
+dbar = r.d[rdi.columns].mean()
 #+end_src
 
 Now, the inner/dot/matrix product between =dbar= and the =rdi=
@@ -280,7 +265,7 @@ average household:
 #+begin_src jupyter-python
 # This matrix product gives minimum nutrient requirements for
 # the average household
-hh_rdi = rdi.replace('',0)@dbar
+hh_rdi = rdi@dbar
 
 hh_rdi
 #+end_src
