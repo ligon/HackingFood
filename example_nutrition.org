@@ -1,8 +1,9 @@
-* Nutrient Demands
-  :PROPERTIES:
-  :EXPORT_FILE_NAME: ../Materials/Project4/example_nutrition.ipynb
-  :header-args: :tangle ../Materials/Project4/example_nutrition.py
+  :SETUP:
+#+FILE_NAME: ../Materials/Project4/example_nutrition.ipynb
+#+PROPERTY: header-args:jupyter-python :tangle ../Materials/Project4/example_nutrition.py
   :END:
+
+* Nutrient Demands
 ** Introduction
  In our last project we used data to estimate systems of food demand
  using different datasets.  An output from that project was as set of
@@ -270,7 +271,7 @@ hh_rdi = rdi@dbar
 hh_rdi
 #+end_src
 
-* Nutritional Adequacy of Food Demands                            
+* Nutritional Adequacy of Food Demands
 Since we can trace out demands for nutrients as a function of $(x,p)$,
 and we've computed minimum nutritional requirements for the average
 household, we can /normalize/ nutritional intake to check the adequacy

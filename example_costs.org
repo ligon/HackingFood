@@ -31,7 +31,7 @@ Get food budget for all households, then find median budget:
 #+begin_src jupyter-python
 import numpy as np
 
-xhat = r.predicted_expenditures()
+xhat = uga.predicted_expenditures()
 
 # Total food expenditures per household
 xbar = xhat.groupby(['i','t','m']).sum()
@@ -140,10 +140,10 @@ my_j = 'Millet'  # Interesting Ugandan staple
 P = np.geomspace(.01,10,50)*pbar[my_j]
 
 # Utility of median household, given prices
-U0 = r.indirect_utility(x0,pbar)
+U0 = uga.indirect_utility(x0,pbar)
 
-plt.plot([r.demands(x0,my_prices(p0,j=my_j))[my_j] for p0 in P],P)
-plt.plot([r.demands(U0,my_prices(p0,j=my_j),type="Hicksian")[my_j] for p0 in P],P)
+plt.plot([uga.demands(x0,my_prices(p0,j=my_j))[my_j] for p0 in P],P)
+plt.plot([uga.demands(U0,my_prices(p0,j=my_j),type="Hicksian")[my_j] for p0 in P],P)
 plt.ylabel('Price')
 plt.xlabel(my_j)
 plt.legend(("Marshallian","Hicksian"))
@@ -153,8 +153,8 @@ plt.legend(("Marshallian","Hicksian"))
 *** Welfare measures
  #+begin_src jupyter-python :results silent
 def compensating_variation(U0,p0,p1):
-    x0 = r.expenditure(U0,p0)
-    x1 = r.expenditure(U0,p1)
+    x0 = uga.expenditure(U0,p0)
+    x1 = uga.expenditure(U0,p1)
 
     return x1-x0
 
@@ -166,7 +166,7 @@ def revenue(U0,p0,p1,type='Marshallian'):
     
     dp = p1 - p0 # Change in prices
 
-    c = r.demands(U0,p1,type=type)
+    c = uga.demands(U0,p1,type=type)
 
     dp,c = dp.align(c,join='inner')
 
