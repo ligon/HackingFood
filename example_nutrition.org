@@ -18,7 +18,7 @@ After having estimated a demand system using data from our favorite country, we 
 
  If you don't already have the latest version of the =CFEDemands= package
  installed, grab it, along with some dependencies:
- #+begin_src jupyter-python
+ #+begin_src jupyter-python :tangle no
 #!pip install -r requirements.txt
  #+end_src
 
@@ -34,12 +34,13 @@ import cfe.regression as rgsn
 
 Here are addresses of google sheets for different dataframes for the
 case of Uganda:
-#+begin_src jupyter-python 
-InputFiles = {'Expenditures':('1yVLriVpo7KGUXvR3hq_n53XpXlD5NmLaH1oOMZyV0gQ','Expenditures (2019-20)'),
-              'Prices':('1yVLriVpo7KGUXvR3hq_n53XpXlD5NmLaH1oOMZyV0gQ','Prices'),
-              'HH Characteristics':('1yVLriVpo7KGUXvR3hq_n53XpXlD5NmLaH1oOMZyV0gQ','HH Characteristics'),
-              'FCT':('1yVLriVpo7KGUXvR3hq_n53XpXlD5NmLaH1oOMZyV0gQ','FCT'),
-              'RDI':('1yVLriVpo7KGUXvR3hq_n53XpXlD5NmLaH1oOMZyV0gQ','RDI'),}
+#+begin_src jupyter-python
+uganda_file = "1yFWlP5N7Aowaj6t2roRSFFUC50aFD-RLBGfzGtqLl0w"
+InputFiles = {'Expenditures':(uganda_file,'Food Expenditures (2019-20)'),
+              'Prices':(uganda_file,'Food Prices (2019-20)'),
+              'HH Characteristics':(uganda_file,'Household Characteristics'),
+              'FCT':(uganda_file,'FCT'),
+              'RDI':(uganda_file,'RDI'),}
 #+end_src
 
 *** Prices, FCT, RDI
@@ -50,21 +51,15 @@ import pandas as pd
 
 # Get prices
 p = read_sheets(InputFiles['Prices'][0],
-                sheet=InputFiles['Prices'][1])
+                sheet=InputFiles['Prices'][1]).set_index(['t', 'm', 'j', 'u'])
 
-p = p.set_index(['t','m'])
-p.columns.name = 'j'
-
-p = p.apply(lambda x: pd.to_numeric(x,errors='coerce'))
-p = p.replace(0,np.nan)
+p = p.xs('Kg', level="u").squeeze().unstack("j")
 
 fct = read_sheets(InputFiles['FCT'][0],
                   sheet=InputFiles['FCT'][1])
-
+fct['j'] = fct['index']
 fct = fct.set_index('j')
-fct.columns.name = 'n'
-
-fct = fct.apply(lambda x: pd.to_numeric(x,errors='coerce'))
+fct.drop(columns=['index'], inplace=True)
 
 ################## RDI, if available (consider using US) #####################
 rdi = read_sheets(InputFiles['RDI'][0],
@@ -84,8 +79,11 @@ Choose reference prices.  Here we'll choose a particular year, and average price
 #+begin_src jupyter-python
 # Reference prices chosen from a particular time; average across place.
 # These are prices per kilogram:
-pbar = p.xs('2019-20',level='t').mean()
-pbar = pbar[r.beta.index] # Only use prices for goods we can estimate
+pbar = p[r.beta.index] # Only use prices for goods we can estimate
+pbar = pbar.mean(axis=0)
+
+# Replace missing prices with 1 (this is because they're best measured in expenditures)
+pbar = pbar.replace(np.nan,1)
 #+end_src
 
 *** Budgets
@@ -110,13 +108,11 @@ qhat = (xhat.unstack('j')/pbar).dropna(how='all')
 
 # Drop missing columns
 qhat = qhat.loc[:,qhat.count()>0]
-
-qhat
 #+end_src
 
 Finally, define a function to change a single price in the vector $p$:
  #+begin_src jupyter-python :results silent
-def my_prices(p0,p=pbar,j='Millet'):
+def my_prices(p0,j,p=pbar):
     """
     Change price of jth good to p0, holding other prices fixed.
     """
@@ -129,25 +125,24 @@ def my_prices(p0,p=pbar,j='Millet'):
 *** Demand functions
 #+begin_src jupyter-python
 import matplotlib.pyplot as plt
-%matplotlib inline
+# %matplotlib inline
 
-use = 'Millet'  # Good we want demand curve for
+use = 'Matoke'  # Good we want demand curve for
 
 # Vary prices from 50% to 200% of reference.
 scale = np.linspace(.5,2,20)
 
 # Demand for Millet for household at median budget
-plt.plot([r.demands(xref,my_prices(pbar[use]*s,pbar))[use] for s in scale],scale)
+plt.plot([r.demands(xref,my_prices(pbar[use]*s,use,pbar))[use] for s in scale],scale)
 
 # Demand for Millet for household at 25% percentile
-plt.plot([r.demands(xbar.quantile(0.25),my_prices(pbar[use]*s,pbar))[use] for s in scale],scale)
+plt.plot([r.demands(xbar.quantile(0.25),my_prices(pbar[use]*s,use,pbar))[use] for s in scale],scale)
 
 # Demand for Millet for household at 75% percentile
-plt.plot([r.demands(xbar.quantile(0.75),my_prices(pbar[use]*s,pbar))[use] for s in scale],scale)
+plt.plot([r.demands(xbar.quantile(0.75),my_prices(pbar[use]*s,use,pbar))[use] for s in scale],scale)
 
 plt.ylabel(f"Price (relative to base of {pbar[use]:.2f})")
 plt.xlabel(f"Quantities of {use} Demanded")
-
 #+end_src
 *** Engel Curves
 
@@ -256,6 +251,16 @@ ax.set_ylabel('log nutrient')
    For the average household in our data, the number of
    different kinds of people can be computed by averaging over households:
 #+begin_src jupyter-python :results silent
+def clean_rdi_demogs(colname): 
+    sex, age = colname.split()
+
+    sex = "Females" if sex == "F" else "Males"
+    age = "51-99" if age == "51+" else age
+
+    return f"{sex} {age}"
+
+rdi.columns = [clean_rdi_demogs(x) for x in rdi.columns]
+
 # In first round, averaged over households and villages
 dbar = r.d[rdi.columns].mean()
 #+end_src

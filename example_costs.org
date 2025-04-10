@@ -135,7 +135,7 @@ income effect associated with changing prices.
 import matplotlib.pyplot as plt
 %matplotlib inline
 
-my_j = 'Millet'  # Interesting Ugandan staple
+my_j = 'Millet Flour'  # Interesting Ugandan staple
 
 P = np.geomspace(.01,10,50)*pbar[my_j]
 
