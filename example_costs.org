@@ -135,15 +135,15 @@ income effect associated with changing prices.
 import matplotlib.pyplot as plt
 %matplotlib inline
 
-my_j = 'Millet'  # Interesting Ugandan staple
+my_j = 'Matoke'  # Interesting Ugandan staple
 
 P = np.geomspace(.01,10,50)*pbar[my_j]
 
 # Utility of median household, given prices
 U0 = uga.indirect_utility(x0,pbar)
 
-plt.plot([uga.demands(x0,my_prices(p0,j=my_j))[my_j] for p0 in P],P)
-plt.plot([uga.demands(U0,my_prices(p0,j=my_j),type="Hicksian")[my_j] for p0 in P],P)
+plt.plot([uga.demands(x0,my_prices(my_j,p0))[my_j] for p0 in P],P)
+plt.plot([uga.demands(U0,my_prices(my_j,p0),type="Hicksian")[my_j] for p0 in P],P)
 plt.ylabel('Price')
 plt.xlabel(my_j)
 plt.legend(("Marshallian","Hicksian"))
@@ -194,11 +194,11 @@ tax or subsidy) and compensating variation.
  #+begin_src jupyter-python
 fig, ax1 = plt.subplots()
 
-ax1.plot(P,[compensating_variation(U0,pbar,my_prices(p0,j=my_j)) for p0 in P])
+ax1.plot(P,[compensating_variation(U0,pbar,my_prices(my_j,p0)) for p0 in P])
 ax1.set_xlabel(f"Price of {my_j}")
 ax1.set_ylabel("Compensating Variation")
 
-ax1.plot(P,[revenue(U0,pbar,my_prices(p0,j=my_j),type='Hicksian') for p0 in P],'k')
+ax1.plot(P,[revenue(U0,pbar,my_prices(my_j,p0),type='Hicksian') for p0 in P],'k')
 ax1.legend(('Compensating Variation','Revenue'))
 ax1.axhline(0)
 ax1.axvline(pbar.loc[my_j])
@@ -211,7 +211,7 @@ Differences between revenue and compensating variation is deadweight-loss:
  #+begin_src jupyter-python
 fig, ax1 = plt.subplots()
 
-ax1.plot(P,[deadweight_loss(U0,pbar,my_prices(p0,j=my_j)) for p0 in P])
+ax1.plot(P,[deadweight_loss(U0,pbar,my_prices(my_j,p0)) for p0 in P])
 ax1.set_xlabel("Price of %s" % my_j)
 ax1.set_ylabel("Deadweight Loss")
  #+end_src

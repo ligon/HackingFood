@@ -19,7 +19,7 @@ After having estimated a demand system using data from our favorite country, we 
  If you don't already have the latest version of the =CFEDemands= package
  installed, grab it, along with some dependencies:
  #+begin_src jupyter-python
-#!pip install -r requirements.txt
+ #%pip install -r requirements.txt
  #+end_src
 
  #+begin_src jupyter-python :results silent
@@ -27,65 +27,115 @@ import pandas as pd
 import cfe.regression as rgsn
  #+end_src
 
-** Data
- We'll get data from two places.  First, basic data, including a food
- conversion table and recommended daily intakes table can be found in
- a google spreadsheet.
+** From Sheet to DataFrame to Regression Object
 
-Here are addresses of google sheets for different dataframes for the
-case of Uganda:
-#+begin_src jupyter-python 
-InputFiles = {'Expenditures':('1yVLriVpo7KGUXvR3hq_n53XpXlD5NmLaH1oOMZyV0gQ','Expenditures (2019-20)'),
-              'Prices':('1yVLriVpo7KGUXvR3hq_n53XpXlD5NmLaH1oOMZyV0gQ','Prices'),
-              'HH Characteristics':('1yVLriVpo7KGUXvR3hq_n53XpXlD5NmLaH1oOMZyV0gQ','HH Characteristics'),
-              'FCT':('1yVLriVpo7KGUXvR3hq_n53XpXlD5NmLaH1oOMZyV0gQ','FCT'),
-              'RDI':('1yVLriVpo7KGUXvR3hq_n53XpXlD5NmLaH1oOMZyV0gQ','RDI'),}
+We begin by defining a dictionary that contains the spreadsheet key.
+One is provided for the Ugandan example that I wish to work
+through.
+#+begin_src jupyter-python :results silent 
+Uganda_Data = '1yFWlP5N7Aowaj6t2roRSFFUC50aFD-RLBGfzGtqLl0w'
 #+end_src
 
-*** Prices, FCT, RDI
-#+begin_src jupyter-python 
-from eep153_tools.sheets import read_sheets
-import numpy as np
+With the spreadsheet defined , grab it and define a couple of
+dataframes. (Sheets should be shared with =students@eep153.iam.gserviceaccount.com=):
+
+#+begin_src jupyter-python :results silent
 import pandas as pd
+import numpy as np
+from eep153_tools.sheets import read_sheets
 
-# Get prices
-p = read_sheets(InputFiles['Prices'][0],
-                sheet=InputFiles['Prices'][1])
+# Change 'Uganda_Data' to key of your own sheet in Sheets, above
+x = read_sheets(Uganda_Data,sheet='Food Expenditures (2019-20)')
+x = x.set_index(['i','t','m','j']).squeeze()
 
-p = p.set_index(['t','m'])
-p.columns.name = 'j'
 
-p = p.apply(lambda x: pd.to_numeric(x,errors='coerce'))
-p = p.replace(0,np.nan)
+# Now prices
+p = read_sheets(Uganda_Data,sheet='Food Prices (2019-20)').set_index(['t','m','j','u'])
 
-fct = read_sheets(InputFiles['FCT'][0],
-                  sheet=InputFiles['FCT'][1])
+# Compute medians of prices for particular time, place and unit
+p = p.groupby(['t','m','j','u']).median()
+
+# Just keep metric units
+p = p.xs('Kg',level="u").squeeze().unstack('j')
+
+# Get intersection of goods we have prices *and* expenditures for:
+jidx = p.columns.intersection(x.index.levels[-1])
+
+# Drop prices for goods we don't have expenditures for
+p = p[jidx].T
+
+# Household characteristics
+d = read_sheets(Uganda_Data,sheet="Household Characteristics")
+d.columns.name = 'k'
+
+# Fill blanks with zeros
+d = d.replace(np.nan,0)
+
+# Expenditures x may have duplicate columns
+x = x.T.groupby(['i','t','m','j']).sum()
+x = x.replace(0,np.nan) # Replace zeros with missing
+
+# Take logs of expenditures; call this y
+y = np.log(x)
+
+d.set_index(['i','t','m'],inplace=True)
+#+end_src
+
+This gives a dataframe of household characteristics $d$ with a simple structure.
+
+#+begin_src jupyter-python :tangle no
+d.head()
+#+end_src
+
+Also a dataframe of log expenditures $y$ with a similarly simple
+structure.  Note that any expenditures of zero are dropped and
+replaced with a missing value indicator.
+#+begin_src jupyter-python :tangle no
+y.head()
+#+end_src
+
+Finally, construct a regression object:
+#+begin_src jupyter-python 
+r = rgsn.Regression(y=y,d=d)
+#+end_src
+
+** Additional Data
+Using the data on household characteristics and (log) expenditures, we can estimate the demand system (=d=,=y=).  This gives us predictions of expenditures on different kinds of foods.  Then if we divide these expenditures by prices, we get predicted quantities of food.
+
+However, here we're interested in nutritional outcomes, so we need a food conversion table:
+#+begin_src jupyter-python 
+fct = read_sheets(Uganda_Data,sheet='FCT')
 
 fct = fct.set_index('j')
 fct.columns.name = 'n'
 
 fct = fct.apply(lambda x: pd.to_numeric(x,errors='coerce'))
+#+end_src
 
-################## RDI, if available (consider using US) #####################
-rdi = read_sheets(InputFiles['RDI'][0],
-                  sheet=InputFiles['RDI'][1])
+We also want to establish when nutrition is /adequate/ for households with different compositions.  For this, we want data on recommended dietary intakes:
+#+begin_src jupyter-python 
+rdi = read_sheets(Uganda_Data,sheet='RDI')
+
 rdi = rdi.set_index('n')
 rdi.columns.name = 'k'
+
+rdi = rdi.apply(lambda x: pd.to_numeric(x,errors='coerce'))
 #+end_src
+
 *** Pre-estimated Demand Systems
  An instance =r= of =cfe.Regression= can be made persistent with
  =r.to_pickle('my_result.pickle')=, which saves the instance "on disk", and can be loaded using =cfe.regression.read_pickle=.  We use  this method below to load data and demand system previously estimated for Uganda:
 #+begin_src jupyter-python
-r = rgsn.read_pickle('../Project3/uganda_estimates.rgsn')  # Assumes you've already set this up e.g., in Project 3
- #+end_src
+# Assumes you've already set this up e.g., in Project 3
+r = rgsn.read_pickle('../Project3/uganda_estimates.rgsn')  
+#+end_src
 
 *** Reference Prices
 Choose reference prices.  Here we'll choose a particular year, and average prices across markets.  If you wanted to focus on particular market you'd do this differently.
 #+begin_src jupyter-python
 # Reference prices chosen from a particular time; average across place.
 # These are prices per kilogram:
-pbar = p.xs('2019-20',level='t').mean()
-pbar = pbar[r.beta.index] # Only use prices for goods we can estimate
+pbar = p.loc[r.beta.index].mean(axis=1).fillna(1) # Only use prices for goods we can estimate
 #+end_src
 
 *** Budgets
@@ -116,9 +166,9 @@ qhat
 
 Finally, define a function to change a single price in the vector $p$:
  #+begin_src jupyter-python :results silent
-def my_prices(p0,p=pbar,j='Millet'):
+def my_prices(j,p0,p=pbar):
     """
-    Change price of jth good to p0, holding other prices fixed.
+    Change price of jth good to p0, holding other prices fixed at p.
     """
     p = p.copy()
     p.loc[j] = p0
@@ -127,23 +177,25 @@ def my_prices(p0,p=pbar,j='Millet'):
 
 ** Demands
 *** Demand functions
+#+begin_src jupyter-python :tangle no
+%matplotlib inline
+#+end_src
 #+begin_src jupyter-python
 import matplotlib.pyplot as plt
-%matplotlib inline
 
-use = 'Millet'  # Good we want demand curve for
+use = 'Matoke'  # Good we want demand curve for
 
 # Vary prices from 50% to 200% of reference.
 scale = np.linspace(.5,2,20)
 
-# Demand for Millet for household at median budget
-plt.plot([r.demands(xref,my_prices(pbar[use]*s,pbar))[use] for s in scale],scale)
+# Demand for Matoke for household at median budget
+plt.plot([r.demands(xref,my_prices(use,pbar[use]*s,pbar))[use] for s in scale],scale)
 
-# Demand for Millet for household at 25% percentile
-plt.plot([r.demands(xbar.quantile(0.25),my_prices(pbar[use]*s,pbar))[use] for s in scale],scale)
+# Demand for Matoke for household at 25% percentile
+plt.plot([r.demands(xbar.quantile(0.25),my_prices(use,pbar[use]*s,pbar))[use] for s in scale],scale)
 
-# Demand for Millet for household at 75% percentile
-plt.plot([r.demands(xbar.quantile(0.75),my_prices(pbar[use]*s,pbar))[use] for s in scale],scale)
+# Demand for Matoke for household at 75% percentile
+plt.plot([r.demands(xbar.quantile(0.75),my_prices(use,pbar[use]*s,pbar))[use] for s in scale],scale)
 
 plt.ylabel(f"Price (relative to base of {pbar[use]:.2f})")
 plt.xlabel(f"Quantities of {use} Demanded")
@@ -234,7 +286,7 @@ USE_GOOD = 'Oranges'
 
 scale = np.geomspace(.01,10,50)
 
-ndf = pd.DataFrame({s:np.log(nutrient_demand(xref/2,my_prices(pbar[USE_GOOD]*s,j=USE_GOOD)))[UseNutrients] for s in scale}).T
+ndf = pd.DataFrame({s:np.log(nutrient_demand(xref/2,my_prices(USE_GOOD,pbar[USE_GOOD]*s)))[UseNutrients] for s in scale}).T
 
 ax = ndf.plot()
 
@@ -306,7 +358,7 @@ nutritional adequacy varying the price of a single good:
 #+begin_src jupyter-python
 scale = np.geomspace(.01,2,50)
 
-ndf = pd.DataFrame({s*pbar[USE_GOOD]:np.log(nutrient_adequacy_ratio(xref/4,my_prices(pbar[USE_GOOD]*s,j=USE_GOOD),dbar))[UseNutrients] for s in scale}).T
+ndf = pd.DataFrame({s*pbar[USE_GOOD]:np.log(nutrient_adequacy_ratio(xref/4,my_prices(USE_GOOD,pbar[USE_GOOD]*s),dbar))[UseNutrients] for s in scale}).T
 
 fig,ax = plt.subplots()
 ax.plot(ndf['Vitamin C'],ndf.index)
