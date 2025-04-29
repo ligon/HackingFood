@@ -51,7 +51,7 @@ This should give enough information to allow a visitor to your repo to understan
 ** [#A] Unit tests
 Unit tests are a great tool for designing and testing code you produce as a team.
 
-The idea: for any function your team plans to write, think of some tests you'd expect the function to pass /even before/ the function is written. Using the =python= =assert= keyword can be very useful. (there are also more powerful and complex approaches, including the =unittest= module).  Isolate your unit tests into a separate file, and
+The idea: for any function your team plans to write, think of some tests you'd expect the function to pass /even before/ the function is written. Using the =python= =assert= keyword can be very useful. (there are also more powerful and complex approaches, including the =unittest= module).  Isolate your unit tests into a separate file, and use them both to see if your code works, and to identify any breakage or code regressions (in this context, a "regression" is a change to code that used to work that now doesn't).
 
 ** [#A] Choice of a dataset
         You are free (indeed, encouraged) to use one of the datasets
@@ -115,7 +115,7 @@ The idea: for any function your team plans to write, think of some tests you'd e
    Think of awesome new ways to help others visualize what you've
    learned.  
 
-** [#A] Replication & Discussion
+** [#A] Replication & Code Review
 
    Your project and git repository will be shared with some randomly
    chosen other teams, and your team will be randomly chosen to have
@@ -125,5 +125,6 @@ The idea: for any function your team plans to write, think of some tests you'd e
    and code shared with you.  Document your attempt, identifying any
    problems you encountered, your thoughts on overcoming these
    problems, and describing strengths and weaknesses of the other
-   team's analysis.   
+   team's analysis.
 
+   Use =github= issues to share your replication and code review.  It's better to have a large number of /focused/, /specific/ issues---this makes it easier for the team to triage and manage their response to matters you raise.
