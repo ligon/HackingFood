@@ -1,4 +1,11 @@
+:PROPERTIES:
+:EXPORT_FILE_NAME: ../Materials/Project4/add_people.ipynb
+:END:
 #+title: People
+
+#+begin_src jupyter-python
+%pip install CFEDemands
+#+end_src
 
 #+begin_src jupyter-python
 import cfe.regression as rgsn
@@ -10,21 +17,35 @@ Manipulate the household characteristics
 #+begin_src jupyter-python
 import numpy as np
 
-def add_person(d,addition):
+def add_person(d,addition=None):
+    d = d.copy()
 
     if 'Constant' not in d.index:
         d['Constant'] = 1
 
-    d[addition] = d[addition] + 1
+    if addition is not None:
+        d[addition] = d[addition] + 1
 
     people = d.filter(regex='^F|^M')
     d['log HSize'] = np.log(people.sum())
 
     return d
-uga.demands(30000,z=dplus) - uga.demands(30000,z=dbar)
-uga.demands(30000,z=dplus)
-dbar['Constant'] = 1
-dplus = dbar.copy()
-dplus['F 00-03']=dplus['F 00-03']+1
+#+end_src
+
+Mean household characteristics
+#+begin_src jupyter-python
+dbar = add_person(uga.d.mean())
+dbar
+#+end_src
+
+Manipulate the household characteristics
+
+#+begin_src jupyter-python
+dplus = add_person(dbar,'Females 19-30')  # Add a young woman
+dplus
+#+end_src
+
+Calculate the difference in expenditures (total expenditures fixed!)
+#+begin_src jupyter-python
 uga.demands(30000,z=dplus) - uga.demands(30000,z=dbar)
 #+end_src
