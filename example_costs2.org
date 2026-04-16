@@ -6,6 +6,10 @@ First, install =CFEDemand= package if necessary:
 
 #+end_src
 
+#+begin_src jupyter-python
+%matplotlib widget
+#+end_src
+
 * Compensated Policy Experiments
 
 Compare Marshallian (uncompensated) and Hicksian (compensated)
@@ -55,7 +59,7 @@ def deadweight_loss(U0,p0,p1):
     """
     cv = compensating_variation(U0,p0,p1)
 
-    return revenue(U0,p0,p1,type='Hicksian') - cv
+    return cv - revenue(U0,p0,p1,type='Hicksian')
     
     
 def compensated_nutrient_demand(U,p,z=None):
@@ -76,20 +80,20 @@ ax2.set_ylabel('log NAR')
 ax2.plot(P,[np.log(compensated_nutrient_adequacy_ratio(U0,ceteris_paribus_price(USE_GOOD,p0))[UseNutrients]) for p0 in P])
 ax2.legend(UseNutrients)
 ax2.axhline(0)
-ax2.set_xlabel("Price of %s" % USE_GOOD)
+ax2.set_xlabel(f"Price of {USE_GOOD}")
 #+end_src
 
 #+begin_src jupyter-python
 fig, ax1 = plt.subplots()
 
 ax1.plot(P,[compensating_variation(U0,p,ceteris_paribus_price(USE_GOOD,p0)) for p0 in P])
-ax1.set_xlabel("Price of %s" % USE_GOOD)
+ax1.set_xlabel(f"Price of {USE_GOOD}")
 ax1.set_ylabel("Compensating Variation")
 
 ax1.plot(P,[revenue(U0,p,ceteris_paribus_price(USE_GOOD,p0)) for p0 in P],'k')
 ax1.legend(('Compensating Variation','Revenue'))
 ax1.axhline(0)
-ax1.axvline(p.loc[USE_GOOD])
+ax1.axvline(p.sel(i=USE_GOOD).values)
 
 #+end_src
 

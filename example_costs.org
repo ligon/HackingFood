@@ -41,73 +41,6 @@ x0 = xbar.quantile(0.5)  # Household at 0.5 quantile is median
 #+end_src
 
 
-** Mapping to Nutrients :noexport:
-*** FCT
- We've seen how to map prices and budgets into vectors of consumption
- quantities using =cfe.Regression.demands=.  Next we want to think about
- how to map these into bundles of /nutrients/.  The information needed
- for the mapping comes from a "Food Conversion Table" (or database,
- such as the [[https://fdc.nal.usda.gov/][USDA Food Data Central]]).    We've already grabbed an FCT, let's take a look:
- #+begin_src jupyter-python
-fct
- #+end_src
-
-*** Food Quantities
-Get quantities of food by dividing expenditures by prices:
-#+begin_src jupyter-python
-qhat = (xhat.unstack('j')/pbar).dropna(how='all')
-
- #+begin_src jupyter-python
-
-# Predicted budgets (sum of all expenditures for each household)
-xbar = uga.predicted_expenditures().groupby(['i','t']).sum()
-
-# Drop households with /no/ predicted expenditures
-xbar = xbar.where(xbar>0)
-
-# A quantile of 0.5 is the median.  Play with quantile value, or just assign.
-x0 = xbar.quantile(0.5) # Budget (median household)
-
-# Range of budgets to explore
-X = np.linspace(x0/10,x0*5,50)
-
-#+end_src
-
-
- With this =nutrient_demand= function in hand, we can see how nutrient
- outcomes vary with budget, given prices:
- #+begin_src jupyter-python
-import numpy as np
-import matplotlib.pyplot as plt
-
-X = np.linspace(x0/5,x0*5,100)
-
-UseNutrients = ['Protein','Energy','Iron','Calcium','Vitamin C']
-
-df = pd.concat({myx:np.log(nutrient_demand(myx,pbar))[UseNutrients] for myx in X},axis=1).T
-ax = df.plot()
-
-ax.set_xlabel('log budget')
-ax.set_ylabel('log nutrient')
- #+end_src
-
-
- Now how does nutrition vary with prices?
-
- #+begin_src jupyter-python
-USE_GOOD = 'Oranges'
-
-scale = np.geomspace(.01,10,50)
-
-ndf = pd.DataFrame({s:np.log(nutrient_demand(x0/2,ceteris_paribus_price(USE_GOOD,pbar[USE_GOOD]*s)))[UseNutrients] for s in scale}).T
-
-ax = ndf.plot()
-
-ax.set_xlabel('log price')
-ax.set_ylabel('log nutrient')
- #+end_src
-
-
 ** Simple Policy Experiments: Changing Prices
 
 If price of a good increases/decreases, what's the cost to the
@@ -212,7 +145,7 @@ Differences between revenue and compensating variation is deadweight-loss:
 fig, ax1 = plt.subplots()
 
 ax1.plot(P,[deadweight_loss(U0,pbar,ceteris_paribus_price(my_j,p0)) for p0 in P])
-ax1.set_xlabel("Price of %s" % my_j)
+ax1.set_xlabel(f"Price of {my_j}")
 ax1.set_ylabel("Deadweight Loss")
  #+end_src
 
