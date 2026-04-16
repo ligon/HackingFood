@@ -19,7 +19,7 @@ After having estimated a demand system using data from our favorite country, we 
  If you don't already have the latest version of the =CFEDemands= package
  installed, grab it, along with some dependencies:
  #+begin_src jupyter-python
- #%pip install -r requirements.txt
+ #%pip install -r hackingfood_requirements.txt
  #+end_src
 
  #+begin_src jupyter-python :results silent
