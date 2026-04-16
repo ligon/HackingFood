@@ -163,7 +163,7 @@ def ceteris_paribus_price(j,p0,p=pbar):
 **** Plot demand schedule
 #+begin_src jupyter-python
 import matplotlib.pyplot as plt
-%matplotlib inline
+%matplotlib widget
 
 # Values for prices
 ref_price = pbar[my_j]

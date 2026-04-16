@@ -196,7 +196,7 @@ def ceteris_paribus_price(j,p0,p=pbar):
 ** Demands
 *** Demand functions
 #+begin_src jupyter-python :tangle no
-%matplotlib inline
+%matplotlib widget
 #+end_src
 #+begin_src jupyter-python
 use = 'Matoke'  # Good we want demand curve for
