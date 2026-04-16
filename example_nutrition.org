@@ -1,5 +1,5 @@
   :SETUP:
-#+FILE_NAME: ../../Materials/Project4/example_nutrition.ipynb
+#+EXPORT_FILE_NAME: ../../Materials/Project4/example_nutrition.ipynb
 #+PROPERTY: header-args:jupyter-python :tangle ../Materials/Project4/example_nutrition.py
   :END:
 
@@ -18,10 +18,10 @@ After having estimated a demand system using data from our favorite country, we 
 
  If you don't already have the latest version of the =CFEDemands= package
  installed, grab it, along with some dependencies:
- #+begin_src jupyter-python
- #%pip install -r hackingfood_requirements.txt
- %matplotlib notebook
- #+end_src
+#+begin_src jupyter-python
+#%pip install -r hackingfood_requirements.txt
+%matplotlib notebook
+#+end_src
 
  #+begin_src jupyter-python :results silent
 import numpy as np
@@ -204,7 +204,7 @@ use = 'Matoke'  # Good we want demand curve for
 # Vary prices from 50% to 200% of reference.
 scale = np.linspace(.5,2,20)
 
-fig,ax = plt.subplot()
+fig,ax = plt.subplots()
 
 # Demand for Matoke for household at median budget
 ax.plot([r.demands(xref,ceteris_paribus_price(use,pbar[use]*s,pbar))[use] for s in scale],scale)
@@ -216,7 +216,7 @@ ax.plot([r.demands(xbar.quantile(0.25),ceteris_paribus_price(use,pbar[use]*s,pba
 ax.plot([r.demands(xbar.quantile(0.75),ceteris_paribus_price(use,pbar[use]*s,pbar))[use] for s in scale],scale)
 
 ax.set_ylabel(f"Price (relative to base of {pbar[use]:.2f})")
-as.set_xlabel(f"Quantities of {use} Demanded")
+ax.set_xlabel(f"Quantities of {use} Demanded")
 
 #+end_src
 *** Engel Curves
@@ -369,12 +369,15 @@ adequacy ratio," or NAR.
 #+begin_src jupyter-python
 X = np.geomspace(.01*xref,2*xref,100)
 
-pd.DataFrame({x:np.log(nutrient_adequacy_ratio(x,pbar,dbar))[UseNutrients] for x in X}).T.plot()
-plt.legend(UseNutrients)
-plt.xlabel('budget')
-plt.ylabel('log nutrient adequacy ratio')
-plt.axhline(0)
-plt.axvline(xref)
+fig,ax = plt.subplots()
+
+pd.DataFrame({x:np.log(nutrient_adequacy_ratio(x,pbar,dbar))[UseNutrients] for x in X}).T.plot(ax=ax)
+
+ax.legend(UseNutrients)
+ax.set_xlabel('budget')
+ax.set_ylabel('log nutrient adequacy ratio')
+ax.axhline(0)
+ax.axvline(xref)
 #+end_src
 
 As before, we can also vary relative prices.  Here we trace out
