@@ -20,6 +20,7 @@ After having estimated a demand system using data from our favorite country, we 
  installed, grab it, along with some dependencies:
  #+begin_src jupyter-python
  #%pip install -r hackingfood_requirements.txt
+ %matplotlib notebook
  #+end_src
 
  #+begin_src jupyter-python :results silent
@@ -99,6 +100,7 @@ Finally, construct a regression object.  There are two options:
 *Option A:* Build from your own data and estimate.
 #+begin_src jupyter-python
 r = rgsn.Regression(y=y,d=d)
+r.graph_beta()
 #+end_src
 
 *Option B:* Load a pre-estimated demand system (e.g., from Project 3).
@@ -146,7 +148,7 @@ Choose reference prices.  Here we'll choose a particular year, and average price
 # This is a rough default so that the code runs; in a serious analysis
 # you would want to investigate *which* goods lack price data and
 # either find prices from another source or drop those goods.
-pbar = p.loc[r.beta.index].mean(axis=1).fillna(1)
+pbar = p.loc[r.get_beta().index].mean(axis=1).fillna(1)
 #+end_src
 
 *** Budgets
@@ -195,26 +197,26 @@ def ceteris_paribus_price(j,p0,p=pbar):
 
 ** Demands
 *** Demand functions
-#+begin_src jupyter-python :tangle no
-%matplotlib inline
-#+end_src
+
 #+begin_src jupyter-python
 use = 'Matoke'  # Good we want demand curve for
 
 # Vary prices from 50% to 200% of reference.
 scale = np.linspace(.5,2,20)
 
+fig,ax = plt.subplot()
+
 # Demand for Matoke for household at median budget
-plt.plot([r.demands(xref,ceteris_paribus_price(use,pbar[use]*s,pbar))[use] for s in scale],scale)
+ax.plot([r.demands(xref,ceteris_paribus_price(use,pbar[use]*s,pbar))[use] for s in scale],scale)
 
 # Demand for Matoke for household at 25% percentile
-plt.plot([r.demands(xbar.quantile(0.25),ceteris_paribus_price(use,pbar[use]*s,pbar))[use] for s in scale],scale)
+ax.plot([r.demands(xbar.quantile(0.25),ceteris_paribus_price(use,pbar[use]*s,pbar))[use] for s in scale],scale)
 
 # Demand for Matoke for household at 75% percentile
-plt.plot([r.demands(xbar.quantile(0.75),ceteris_paribus_price(use,pbar[use]*s,pbar))[use] for s in scale],scale)
+ax.plot([r.demands(xbar.quantile(0.75),ceteris_paribus_price(use,pbar[use]*s,pbar))[use] for s in scale],scale)
 
-plt.ylabel(f"Price (relative to base of {pbar[use]:.2f})")
-plt.xlabel(f"Quantities of {use} Demanded")
+ax.set_ylabel(f"Price (relative to base of {pbar[use]:.2f})")
+as.set_xlabel(f"Quantities of {use} Demanded")
 
 #+end_src
 *** Engel Curves
