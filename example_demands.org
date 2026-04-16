@@ -130,9 +130,10 @@ qhat
 
 Finally, define a function to change a single price in the vector $p$:
  #+begin_src jupyter-python :results silent
-def my_prices(p0,p=pbar,j='Millet'):
+def ceteris_paribus_price(j,p0,p=pbar):
     """
-    Change price of jth good to p0, holding other prices fixed.
+    Return price vector with the price of good j set to p0,
+    holding all other prices fixed at p.
     """
     p = p.copy()
     p.loc[j] = p0
@@ -150,13 +151,13 @@ use = 'Millet'  # Good we want demand curve for
 scale = np.linspace(.5,2,20)
 
 # Demand for Millet for household at median budget
-plt.plot([r.demands(xref,my_prices(pbar[use]*s,pbar))[use] for s in scale],scale)
+plt.plot([r.demands(xref,ceteris_paribus_price(use,pbar[use]*s,pbar))[use] for s in scale],scale)
 
 # Demand for Millet for household at 25% percentile
-plt.plot([r.demands(xbar.quantile(0.25),my_prices(pbar[use]*s,pbar))[use] for s in scale],scale)
+plt.plot([r.demands(xbar.quantile(0.25),ceteris_paribus_price(use,pbar[use]*s,pbar))[use] for s in scale],scale)
 
 # Demand for Millet for household at 75% percentile
-plt.plot([r.demands(xbar.quantile(0.75),my_prices(pbar[use]*s,pbar))[use] for s in scale],scale)
+plt.plot([r.demands(xbar.quantile(0.75),ceteris_paribus_price(use,pbar[use]*s,pbar))[use] for s in scale],scale)
 
 plt.ylabel(f"Price (relative to base of {pbar[use]:.2f})")
 plt.xlabel(f"Quantities of {use} Demanded")

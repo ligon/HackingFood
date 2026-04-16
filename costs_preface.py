@@ -33,9 +33,13 @@ xhat = xhat.where(xhat>0,np.nan)
 # Note selection of prices for first period and first market
 p = r.prices.sel(t=t,m=m).fillna(1).copy()
 
-def my_prices(p0,p=p,i=USE_GOOD):
+def ceteris_paribus_price(j,p0,p=p):
+    """
+    Return price vector with the price of good j set to p0,
+    holding all other prices fixed at p.
+    """
     p = p.copy()
-    p.loc[i] = p0
+    p.loc[j] = p0
     return p
 
 # Now fix up FCT

@@ -19,8 +19,8 @@ USE_GOOD = 'Milk'
 
 U0 = r.indirect_utility(x0,p)
 
-plt.plot([r.demands(x0,my_prices(p0,i=USE_GOOD))[USE_GOOD] for p0 in P],P)
-plt.plot([r.demands(U0,my_prices(p0,i=USE_GOOD),type="Hicksian")[USE_GOOD] for p0 in P],P)
+plt.plot([r.demands(x0,ceteris_paribus_price(USE_GOOD,p0))[USE_GOOD] for p0 in P],P)
+plt.plot([r.demands(U0,ceteris_paribus_price(USE_GOOD,p0),type="Hicksian")[USE_GOOD] for p0 in P],P)
 plt.ylabel('Price')
 plt.xlabel(USE_GOOD)
 plt.axhline(p.sel(i=USE_GOOD).values)
@@ -73,7 +73,7 @@ def compensated_nutrient_adequacy_ratio(U,p):
 #+begin_src jupyter-python
 fig,ax2 = plt.subplots()
 ax2.set_ylabel('log NAR')
-ax2.plot(P,[np.log(compensated_nutrient_adequacy_ratio(U0,my_prices(p0))[UseNutrients]) for p0 in P])
+ax2.plot(P,[np.log(compensated_nutrient_adequacy_ratio(U0,ceteris_paribus_price(USE_GOOD,p0))[UseNutrients]) for p0 in P])
 ax2.legend(UseNutrients)
 ax2.axhline(0)
 ax2.set_xlabel("Price of %s" % USE_GOOD)
@@ -82,11 +82,11 @@ ax2.set_xlabel("Price of %s" % USE_GOOD)
 #+begin_src jupyter-python
 fig, ax1 = plt.subplots()
 
-ax1.plot(P,[compensating_variation(U0,p,my_prices(p0)) for p0 in P])
+ax1.plot(P,[compensating_variation(U0,p,ceteris_paribus_price(USE_GOOD,p0)) for p0 in P])
 ax1.set_xlabel("Price of %s" % USE_GOOD)
 ax1.set_ylabel("Compensating Variation")
 
-ax1.plot(P,[revenue(U0,p,my_prices(p0)) for p0 in P],'k')
+ax1.plot(P,[revenue(U0,p,ceteris_paribus_price(USE_GOOD,p0)) for p0 in P],'k')
 ax1.legend(('Compensating Variation','Revenue'))
 ax1.axhline(0)
 ax1.axvline(p.loc[USE_GOOD])
