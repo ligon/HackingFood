@@ -1,5 +1,5 @@
   :SETUP:
-#+FILE_NAME: ../Materials/Project4/example_nutrition.ipynb
+#+FILE_NAME: ../../Materials/Project4/example_nutrition.ipynb
 #+PROPERTY: header-args:jupyter-python :tangle ../Materials/Project4/example_nutrition.py
   :END:
 
