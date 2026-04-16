@@ -20,9 +20,10 @@ After having estimated a demand system using data from our favorite country, we 
  installed, grab it, along with some dependencies:
 #+begin_src jupyter-python
 #%pip install -r hackingfood_requirements.txt
-%matplotlib notebook
+%matplotlib widget
 #+end_src
 
+Top level imports!
  #+begin_src jupyter-python :results silent
 import numpy as np
 import pandas as pd
@@ -197,7 +198,6 @@ def ceteris_paribus_price(j,p0,p=pbar):
 
 ** Demands
 *** Demand functions
-
 #+begin_src jupyter-python
 use = 'Matoke'  # Good we want demand curve for
 

@@ -133,7 +133,7 @@ income effect associated with changing prices.
 
  #+begin_src jupyter-python
 import matplotlib.pyplot as plt
-%matplotlib inline
+%matplotlib widget
 
 my_j = 'Matoke'  # Interesting Ugandan staple
 
