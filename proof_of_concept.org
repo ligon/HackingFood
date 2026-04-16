@@ -149,9 +149,10 @@ f"Median income is {x0} in local currency."
 **** Changing one price, holding others fixed
 Finally, define a function to change a single price in the vector $p$:
  #+begin_src jupyter-python :results silent
-def my_prices(p0,p=pbar,j=my_j):
+def ceteris_paribus_price(j,p0,p=pbar):
     """
-    Change price of jth good to p0, holding other prices fixed.
+    Return price vector with the price of good j set to p0,
+    holding all other prices fixed at p.
     """
     p = p.copy()
     p.loc[j] = p0
@@ -169,7 +170,7 @@ ref_price = pbar[my_j]
 P = np.linspace(ref_price/5,ref_price*5,50)
 
 for x in [x0*s for s in [.25,.5,1.,2,4]]:
-    plt.plot([r.demands(x,my_prices(p0))[my_j] for p0 in P],P)
+    plt.plot([r.demands(x,ceteris_paribus_price(my_j,p0))[my_j] for p0 in P],P)
 
 plt.xlabel(my_j)
 plt.ylabel(f'Price of {my_j}')
@@ -293,7 +294,7 @@ plt.axhline(0)
  #+begin_src jupyter-python
 poorer_x = x0/2
 
-plt.plot([np.log(nutrient_adequacy_ratio(poorer_x,my_prices(p0,j=my_j)))[UseNutrients] for p0 in P],P)
+plt.plot([np.log(nutrient_adequacy_ratio(poorer_x,ceteris_paribus_price(my_j,p0)))[UseNutrients] for p0 in P],P)
 plt.legend(UseNutrients)
 plt.ylabel('Price')
 plt.xlabel('log nutrient adequacy ratio')

@@ -22,7 +22,7 @@ from example_nutrition import rdi, nutrient_demand
     the things we don't want to change we can hold fixed.
 
 #+begin_src jupyter-python
-from example_nutrition import pbar, my_prices
+from example_nutrition import pbar, ceteris_paribus_price
 #+end_src
 
 *** Budgets
@@ -99,7 +99,7 @@ USE_GOOD = 'Oranges'
 
 scale = np.geomspace(.01,10,50)
 
-ndf = pd.DataFrame({s:np.log(nutrient_demand(x0/2,my_prices(pbar[USE_GOOD]*s,j=USE_GOOD)))[UseNutrients] for s in scale}).T
+ndf = pd.DataFrame({s:np.log(nutrient_demand(x0/2,ceteris_paribus_price(USE_GOOD,pbar[USE_GOOD]*s)))[UseNutrients] for s in scale}).T
 
 ax = ndf.plot()
 
@@ -142,8 +142,8 @@ P = np.geomspace(.01,10,50)*pbar[my_j]
 # Utility of median household, given prices
 U0 = uga.indirect_utility(x0,pbar)
 
-plt.plot([uga.demands(x0,my_prices(my_j,p0))[my_j] for p0 in P],P)
-plt.plot([uga.demands(U0,my_prices(my_j,p0),type="Hicksian")[my_j] for p0 in P],P)
+plt.plot([uga.demands(x0,ceteris_paribus_price(my_j,p0))[my_j] for p0 in P],P)
+plt.plot([uga.demands(U0,ceteris_paribus_price(my_j,p0),type="Hicksian")[my_j] for p0 in P],P)
 plt.ylabel('Price')
 plt.xlabel(my_j)
 plt.legend(("Marshallian","Hicksian"))
@@ -194,11 +194,11 @@ tax or subsidy) and compensating variation.
  #+begin_src jupyter-python
 fig, ax1 = plt.subplots()
 
-ax1.plot(P,[compensating_variation(U0,pbar,my_prices(my_j,p0)) for p0 in P])
+ax1.plot(P,[compensating_variation(U0,pbar,ceteris_paribus_price(my_j,p0)) for p0 in P])
 ax1.set_xlabel(f"Price of {my_j}")
 ax1.set_ylabel("Compensating Variation")
 
-ax1.plot(P,[revenue(U0,pbar,my_prices(my_j,p0),type='Hicksian') for p0 in P],'k')
+ax1.plot(P,[revenue(U0,pbar,ceteris_paribus_price(my_j,p0),type='Hicksian') for p0 in P],'k')
 ax1.legend(('Compensating Variation','Revenue'))
 ax1.axhline(0)
 ax1.axvline(pbar.loc[my_j])
@@ -211,7 +211,7 @@ Differences between revenue and compensating variation is deadweight-loss:
  #+begin_src jupyter-python
 fig, ax1 = plt.subplots()
 
-ax1.plot(P,[deadweight_loss(U0,pbar,my_prices(my_j,p0)) for p0 in P])
+ax1.plot(P,[deadweight_loss(U0,pbar,ceteris_paribus_price(my_j,p0)) for p0 in P])
 ax1.set_xlabel("Price of %s" % my_j)
 ax1.set_ylabel("Deadweight Loss")
  #+end_src
