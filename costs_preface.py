@@ -38,9 +38,9 @@ def ceteris_paribus_price(j,p0,p=p):
     Return price vector with the price of good j set to p0,
     holding all other prices fixed at p.
     """
-    p = p.copy()
-    p.loc[j] = p0
-    return p
+    myp = p.copy()
+    myp.loc[j] = p0
+    return myp
 
 # Now fix up FCT
 
@@ -100,8 +100,7 @@ def nutrient_adequacy_ratio(x,p):
 UseNutrients = ['Protein','Calories','Iron','Calcium']
 
 # A quantile of 0.5 is the median.  Play with quantile value, or just assign.
-x0 = xhat.sel(t=t,m=m).quantile(0.01,'j') # Budget (median household)
-x0 = 50
+x0 = float(xhat.sel(t=t,m=m).quantile(0.5,'j'))  # Median household budget
 
 X = np.linspace(x0/10,x0*5,50)
 
