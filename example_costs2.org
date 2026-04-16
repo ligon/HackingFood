@@ -2,7 +2,7 @@
 
 First, install =CFEDemand= package if necessary:
 #+begin_src jupyter-python
-!pip install CFEDemands --upgrade
+!pip install -r hackingfood_requirements.txt
 
 #+end_src
 

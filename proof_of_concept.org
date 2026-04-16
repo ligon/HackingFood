@@ -10,7 +10,7 @@
 
   There are a few modules you may need to install:
 #+begin_src jupyter-python
-!pip install -r requirements.txt
+!pip install -r hackingfood_requirements.txt
 #+end_src
 
   All the data required for estimation and calculation can be found

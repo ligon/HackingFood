@@ -4,7 +4,7 @@
 #+title: People
 
 #+begin_src jupyter-python
-%pip install CFEDemands
+%pip install -r hackingfood_requirements.txt
 #+end_src
 
 #+begin_src jupyter-python

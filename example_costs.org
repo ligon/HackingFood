@@ -6,7 +6,7 @@
 
    There are a few modules you may need to install (but avoid this if you can; you may need to restart your kernel afterwards):
  #+begin_src jupyter-python
-#!pip install -r requirements.txt
+#!pip install -r hackingfood_requirements.txt
  #+end_src
 
 We import critical objects from =example_nutrition.py=, avoiding the need to do so in this notebook.  These are for Uganda:
