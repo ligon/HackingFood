@@ -4,10 +4,10 @@
   :END:
 ** Preface
 
-   There are a few modules you may need to install (but avoid this if you can; you may need to restart your kernel afterwards):
- #+begin_src jupyter-python
-#!pip install -r hackingfood_requirements.txt
- #+end_src
+There are a few modules you may need to install (but avoid this if you can; you may need to restart your kernel afterwards):
+#+begin_src jupyter-python
+#%pip install -r hackingfood_requirements.txt
+#+end_src
 
 We import critical objects from =example_nutrition.py=, avoiding the need to do so in this notebook.  These are for Uganda:
 #+begin_src jupyter-python
@@ -66,7 +66,9 @@ income effect associated with changing prices.
 
  #+begin_src jupyter-python
 import matplotlib.pyplot as plt
-%matplotlib widget
+%matplotlib inline
+
+fig,ax = plt.subplots()
 
 my_j = 'Matoke'  # Interesting Ugandan staple
 
@@ -75,16 +77,16 @@ P = np.geomspace(.01,10,50)*pbar[my_j]
 # Utility of median household, given prices
 U0 = uga.indirect_utility(x0,pbar)
 
-plt.plot([uga.demands(x0,ceteris_paribus_price(my_j,p0))[my_j] for p0 in P],P)
-plt.plot([uga.demands(U0,ceteris_paribus_price(my_j,p0),type="Hicksian")[my_j] for p0 in P],P)
-plt.ylabel('Price')
-plt.xlabel(my_j)
-plt.legend(("Marshallian","Hicksian"))
- #+end_src
+ax.plot([uga.demands(x0,ceteris_paribus_price(my_j,p0))[my_j] for p0 in P],P)
+ax.plot([uga.demands(U0,ceteris_paribus_price(my_j,p0),type="Hicksian")[my_j] for p0 in P],P)
+ax.set_ylabel('Price')
+ax.set_xlabel(my_j)
+ax.legend(("Marshallian","Hicksian"))
+#+end_src
 
 
 *** Welfare measures
- #+begin_src jupyter-python :results silent
+#+begin_src jupyter-python :results silent
 def compensating_variation(U0,p0,p1):
     x0 = uga.expenditure(U0,p0)
     x1 = uga.expenditure(U0,p1)
@@ -152,7 +154,7 @@ ax1.set_ylabel("Deadweight Loss")
 
 ** Compensated Nutritional Adequacy
 
-The welfare measures above tell us about /money/---how much a price
+The welfare measures above tell us about money or /budget/---how much a price
 change costs the household.  But we care about /nutrition/.  Using
 Hicksian (compensated) demands, we can ask: if we hold the household's
 utility fixed, how does changing a single price affect nutritional

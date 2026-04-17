@@ -1,6 +1,6 @@
   :SETUP:
 #+EXPORT_FILE_NAME: ../../Materials/Project4/example_nutrition.ipynb
-#+PROPERTY: header-args:jupyter-python :tangle ../Materials/Project4/example_nutrition.py
+#+PROPERTY: header-args:jupyter-python :tangle ../../Materials/Project4/example_nutrition.py
   :END:
 
 * Nutrient Demands
@@ -20,6 +20,10 @@ After having estimated a demand system using data from our favorite country, we 
  installed, grab it, along with some dependencies:
 #+begin_src jupyter-python
 #%pip install -r hackingfood_requirements.txt
+#+end_src
+
+Set up notebook graphics
+#+begin_src jupyter-python :tangle no
 %matplotlib widget
 #+end_src
 
@@ -101,6 +105,9 @@ Finally, construct a regression object.  There are two options:
 *Option A:* Build from your own data and estimate.
 #+begin_src jupyter-python
 r = rgsn.Regression(y=y,d=d)
+#+end_src
+
+#+begin_src jupyter-python :tangle no
 r.graph_beta()
 #+end_src
 
@@ -198,7 +205,7 @@ def ceteris_paribus_price(j,p0,p=pbar):
 
 ** Demands
 *** Demand functions
-#+begin_src jupyter-python
+#+begin_src jupyter-python :tangle no
 use = 'Matoke'  # Good we want demand curve for
 
 # Vary prices from 50% to 200% of reference.
@@ -221,7 +228,7 @@ ax.set_xlabel(f"Quantities of {use} Demanded")
 #+end_src
 *** Engel Curves
 
-#+begin_src jupyter-python
+#+begin_src jupyter-python :tangle no
 fig,ax = plt.subplots()
 
 scale = np.geomspace(.01,10,50)
@@ -290,7 +297,7 @@ def nutrient_demand(x,p,r=r,fct=fct):
  =-inf= or =NaN=, which can corrupt your plots.  In production code
  you might clip values first (e.g., =N.clip(lower=1e-10)=) or add an
  assertion that all quantities are positive.
- #+begin_src jupyter-python
+#+begin_src jupyter-python :tangle no
 X = np.linspace(xref/5,xref*5,50)
 
 UseNutrients = ['Protein','Energy','Iron','Calcium','Vitamin C']
@@ -300,12 +307,12 @@ ax = df.plot()
 
 ax.set_xlabel('budget')
 ax.set_ylabel('log nutrient')
- #+end_src
+#+end_src
 
 
  Now how does nutrition vary with prices?
 
- #+begin_src jupyter-python
+#+begin_src jupyter-python :tangle no
 USE_GOOD = 'Oranges'
 
 scale = np.geomspace(.01,10,50)
@@ -316,7 +323,7 @@ ax = ndf.plot()
 
 ax.set_xlabel(f'Price of {USE_GOOD}')
 ax.set_ylabel('log nutrient')
- #+end_src
+#+end_src
 
 
 ** Nutritional Needs of Households
@@ -366,7 +373,7 @@ clearly nutritional inadequacy.  For this reason the ratio of
 actual nutrients to required nutrients is termed the "nutrient
 adequacy ratio," or NAR.
 
-#+begin_src jupyter-python
+#+begin_src jupyter-python :tangle no
 X = np.geomspace(.01*xref,2*xref,100)
 
 fig,ax = plt.subplots()
@@ -382,7 +389,7 @@ ax.axvline(xref)
 
 As before, we can also vary relative prices.  Here we trace out
 nutritional adequacy varying the price of a single good:
-#+begin_src jupyter-python
+#+begin_src jupyter-python :tangle no
 scale = np.geomspace(.01,2,50)
 
 ndf = pd.DataFrame({s*pbar[USE_GOOD]:np.log(nutrient_adequacy_ratio(xref/4,ceteris_paribus_price(USE_GOOD,pbar[USE_GOOD]*s),dbar))[UseNutrients] for s in scale}).T
