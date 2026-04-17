@@ -12,7 +12,7 @@
 We import critical objects from =example_nutrition.py=, avoiding the need to do so in this notebook.  These are for Uganda:
 #+begin_src jupyter-python
 from example_nutrition import r as uga
-from example_nutrition import rdi, nutrient_demand
+from example_nutrition import rdi, fct, nutrient_demand
 #+end_src
 
 
@@ -150,6 +150,73 @@ ax1.set_ylabel("Deadweight Loss")
  #+end_src
 
 
+** Compensated Nutritional Adequacy
 
+The welfare measures above tell us about /money/---how much a price
+change costs the household.  But we care about /nutrition/.  Using
+Hicksian (compensated) demands, we can ask: if we hold the household's
+utility fixed, how does changing a single price affect nutritional
+adequacy?
 
+*** Compensated nutrient demands
+
+ #+begin_src jupyter-python :results silent
+# Average household characteristics
+dbar = uga.d[rdi.columns].mean()
+
+# Minimum nutrient requirements for the average household (weekly)
+hh_rdi = rdi.replace('',0)@dbar*7
+
+UseNutrients = ['Protein','Energy','Iron','Calcium','Vitamin C']
+
+def compensated_nutrient_demand(U,p):
+    """Nutrient vector from Hicksian demands at utility U and prices p."""
+    c = uga.demands(U,p,type='Hicksian')
+    fct0,c0 = fct.align(c,axis=0,join='inner')
+    return fct0.T@c0
+
+def compensated_nutrient_adequacy_ratio(U,p):
+    """NAR using Hicksian demands: holds utility fixed as prices vary."""
+    return compensated_nutrient_demand(U,p)/hh_rdi
+ #+end_src
+
+*** Compensated NAR vs. price
+
+How does nutritional adequacy respond to a price change, once we
+compensate the household so utility is unchanged?
+
+ #+begin_src jupyter-python
+fig, ax2 = plt.subplots()
+ax2.plot(P,[np.log(compensated_nutrient_adequacy_ratio(U0,ceteris_paribus_price(my_j,p0))[UseNutrients]) for p0 in P])
+ax2.legend(UseNutrients)
+ax2.axhline(0)
+ax2.set_xlabel(f"Price of {my_j}")
+ax2.set_ylabel('log NAR')
+ #+end_src
+
+*** Costs of improving nutrition
+
+Now we can connect the two threads: given a nutritional goal (e.g.,
+raise the NAR for a particular nutrient above 1), what is the
+deadweight loss of achieving it via a price subsidy?
+
+ #+begin_src jupyter-python
+fig, (ax_nar, ax_dwl) = plt.subplots(1,2,figsize=(10,4))
+
+nar_vals = [np.log(compensated_nutrient_adequacy_ratio(U0,ceteris_paribus_price(my_j,p0))[UseNutrients]) for p0 in P]
+dwl_vals = [deadweight_loss(U0,pbar,ceteris_paribus_price(my_j,p0)) for p0 in P]
+
+ax_nar.plot(P,nar_vals)
+ax_nar.axhline(0)
+ax_nar.set_xlabel(f"Price of {my_j}")
+ax_nar.set_ylabel('log NAR')
+ax_nar.legend(UseNutrients)
+
+ax_dwl.plot(P,dwl_vals)
+ax_dwl.set_xlabel(f"Price of {my_j}")
+ax_dwl.set_ylabel('Deadweight Loss')
+
+fig.suptitle('Nutrition vs. Welfare Cost of Price Changes')
+fig.tight_layout()
+ #+end_src
 
