@@ -1,1 +1,4 @@
 /.ipynb_checkpoints/
+
+# SuCoder per-mirror session state
+.coder-session/
